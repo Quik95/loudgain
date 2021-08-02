@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"regexp"
 )
+
+var Integrated_Loudness_Filter *regexp.Regexp = regexp.MustCompile(`I:\s*(-?\d+\.?\d{1})\sLUFS`)
 
 // GetFFmpegPath gets the location of an ffmpeg binary in the system.
 func GetFFmpegPath() (string, error) {
@@ -39,7 +42,18 @@ func RunLoudnessScan(filepath string) (string, error) {
 		return "", fmt.Errorf(output.String())
 	}
 
-	log.Println(output.String())
-
 	return output.String(), nil
+}
+
+func ParseLounessOutput(data string) error {
+	intergratedLoudnessSubgroups := Integrated_Loudness_Filter.FindAllStringSubmatch(data, -1)
+	if intergratedLoudnessSubgroups == nil {
+		return fmt.Errorf("Can't match integrated loudness\n%s", data)
+	}
+
+	integratedLoudness := intergratedLoudnessSubgroups[len(intergratedLoudnessSubgroups)-1][1]
+
+	log.Printf("Integrated loudness of the file is: %s LUFS", integratedLoudness)
+
+	return nil
 }
