@@ -23,5 +23,7 @@ func main() {
 		log.Fatalf("failed to get loudness ratings: %s", err)
 	}
 
+	// log.Println(loudness)
+
 	loudgain.ParseLounessOutput(loudness)
 }

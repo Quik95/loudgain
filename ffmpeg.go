@@ -8,7 +8,9 @@ import (
 	"regexp"
 )
 
-var Integrated_Loudness_Filter *regexp.Regexp = regexp.MustCompile(`I:\s*(-?\d+\.?\d{1})\sLUFS`)
+var integratedLoudnessFilter *regexp.Regexp = regexp.MustCompile(`I:\s*(-?\d+\.?\d{1})\sLUFS`)
+var loudnessRangeFilter *regexp.Regexp = regexp.MustCompile(`LRA:\s*(-?\d+\.?\d{1})\sLU`)
+var truePeakFilter *regexp.Regexp = regexp.MustCompile(`Peak:\s*(-?\d+\.?\d{1})\sdBFS`)
 
 // GetFFmpegPath gets the location of an ffmpeg binary in the system.
 func GetFFmpegPath() (string, error) {
@@ -46,14 +48,33 @@ func RunLoudnessScan(filepath string) (string, error) {
 }
 
 func ParseLounessOutput(data string) error {
-	intergratedLoudnessSubgroups := Integrated_Loudness_Filter.FindAllStringSubmatch(data, -1)
-	if intergratedLoudnessSubgroups == nil {
-		return fmt.Errorf("Can't match integrated loudness\n%s", data)
+	integratedLoudness, err := filterData(data, integratedLoudnessFilter)
+	if err != nil {
+		return fmt.Errorf("failed to match integrated loudness: %w", err)
 	}
 
-	integratedLoudness := intergratedLoudnessSubgroups[len(intergratedLoudnessSubgroups)-1][1]
+	loudnessRange, err := filterData(data, loudnessRangeFilter)
+	if err != nil {
+		return fmt.Errorf("failed to match loudness range: %w", err)
+	}
+
+	truePeak, err := filterData(data, truePeakFilter)
+	if err != nil {
+		return fmt.Errorf("failed to match true peak: %w", err)
+	}
 
 	log.Printf("Integrated loudness of the file is: %s LUFS", integratedLoudness)
+	log.Printf("Loudness range of the file is: %s LU", loudnessRange)
+	log.Printf("True peak of the file is: %s dBFS", truePeak)
 
 	return nil
+}
+
+func filterData(data string, filter *regexp.Regexp) (string, error) {
+	resultWithSubgroups := filter.FindAllStringSubmatch(data, -1)
+	if resultWithSubgroups == nil {
+		return "", fmt.Errorf("failed to match\n%s", data)
+	}
+
+	return resultWithSubgroups[len(resultWithSubgroups)-1][1], nil
 }
