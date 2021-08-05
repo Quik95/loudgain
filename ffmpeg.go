@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math"
 	"os/exec"
 	"regexp"
+	"strconv"
 )
 
-var integratedLoudnessFilter *regexp.Regexp = regexp.MustCompile(`I:\s*(-?\d+\.?\d{1})\sLUFS`)
-var loudnessRangeFilter *regexp.Regexp = regexp.MustCompile(`LRA:\s*(-?\d+\.?\d{1})\sLU`)
-var truePeakFilter *regexp.Regexp = regexp.MustCompile(`Peak:\s*(-?\d+\.?\d{1})\sdBFS`)
+var (
+	integratedLoudnessFilter *regexp.Regexp = regexp.MustCompile(`I:\s*(-?\d+\.?\d{1})\sLUFS`)
+	loudnessRangeFilter      *regexp.Regexp = regexp.MustCompile(`LRA:\s*(-?\d+\.?\d{1})\sLU`)
+	truePeakFilter           *regexp.Regexp = regexp.MustCompile(`Peak:\s*(-?\d+\.?\d{1})\sdBFS`)
+)
 
 // GetFFmpegPath gets the location of an ffmpeg binary in the system.
 func GetFFmpegPath() (string, error) {
@@ -47,27 +51,63 @@ func RunLoudnessScan(filepath string) (string, error) {
 	return output.String(), nil
 }
 
-func ParseLounessOutput(data string) error {
+// ParseLoudnessOutput parses ffmpeg ebur128 filter output.
+func ParseLounessOutput(data string, filepath string) (LoudnessLevel, error) {
 	integratedLoudness, err := filterData(data, integratedLoudnessFilter)
 	if err != nil {
-		return fmt.Errorf("failed to match integrated loudness: %w", err)
+		return LoudnessLevel{}, fmt.Errorf("failed to match integrated loudness: %w", err)
 	}
 
 	loudnessRange, err := filterData(data, loudnessRangeFilter)
 	if err != nil {
-		return fmt.Errorf("failed to match loudness range: %w", err)
+		return LoudnessLevel{}, fmt.Errorf("failed to match loudness range: %w", err)
 	}
 
 	truePeak, err := filterData(data, truePeakFilter)
 	if err != nil {
-		return fmt.Errorf("failed to match true peak: %w", err)
+		return LoudnessLevel{}, fmt.Errorf("failed to match true peak: %w", err)
 	}
 
-	log.Printf("Integrated loudness of the file is: %s LUFS", integratedLoudness)
-	log.Printf("Loudness range of the file is: %s LU", loudnessRange)
-	log.Printf("True peak of the file is: %s dBFS", truePeak)
+	integratedLoudnessFloat, err := strconv.ParseFloat(integratedLoudness, 64)
+	if err != nil {
+		return LoudnessLevel{}, err
+	}
 
-	return nil
+	loudnessRangeFloat, err := strconv.ParseFloat(loudnessRange, 64)
+	if err != nil {
+		return LoudnessLevel{}, err
+	}
+
+	truePeakFloat, err := strconv.ParseFloat(truePeak, 64)
+	if err != nil {
+		return LoudnessLevel{}, err
+	}
+
+	ll := LoudnessLevel{
+		IntegratedLoudness: integratedLoudnessFloat,
+		LoudnessRange:      loudnessRangeFloat,
+		TruePeak:           decibelToLinear(truePeakFloat),
+		Filepath:           filepath,
+	}
+
+	return ll, nil
+}
+
+// LoudnessLevel represents the loudness data of a given song.
+type LoudnessLevel struct {
+	IntegratedLoudness, LoudnessRange, TruePeak float64
+	Filepath                                    string
+}
+
+// String returns a textual representation of this struct.
+func (ll LoudnessLevel) String() string {
+	return fmt.Sprintf(
+		"\nFilepath: %s\n"+
+			"Integrated loudness: %f LUFS\n"+
+			"Loudness Range: %f LU\n"+
+			"True peak: %f",
+		ll.Filepath, ll.IntegratedLoudness, ll.LoudnessRange, ll.TruePeak,
+	)
 }
 
 func filterData(data string, filter *regexp.Regexp) (string, error) {
@@ -77,4 +117,8 @@ func filterData(data string, filter *regexp.Regexp) (string, error) {
 	}
 
 	return resultWithSubgroups[len(resultWithSubgroups)-1][1], nil
+}
+
+func decibelToLinear(in float64) float64 {
+	return math.Pow(10.0, in/20)
 }

@@ -7,6 +7,8 @@ import (
 	"github.com/Quik95/loudgain"
 )
 
+const filepath = "/tmp/song.mp3"
+
 func main() {
 	songs := os.Args[1:]
 	log.Println(songs)
@@ -18,12 +20,15 @@ func main() {
 
 	log.Printf("ffmpeg is located at: %s", ffmpegPath)
 
-	loudness, err := loudgain.RunLoudnessScan("/tmp/song.mp3")
+	loudness, err := loudgain.RunLoudnessScan(filepath)
 	if err != nil {
 		log.Fatalf("failed to get loudness ratings: %s", err)
 	}
 
-	// log.Println(loudness)
+	ll, err := loudgain.ParseLounessOutput(loudness, filepath)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-	loudgain.ParseLounessOutput(loudness)
+	log.Println(ll)
 }
