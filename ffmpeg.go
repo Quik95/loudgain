@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"math"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -86,7 +85,7 @@ func ParseLounessOutput(data string, filepath string) (LoudnessLevel, error) {
 	ll := LoudnessLevel{
 		IntegratedLoudness: integratedLoudnessFloat,
 		LoudnessRange:      loudnessRangeFloat,
-		TruePeak:           decibelToLinear(truePeakFloat),
+		TruePeakdB:         truePeakFloat,
 		Filepath:           filepath,
 	}
 
@@ -95,8 +94,8 @@ func ParseLounessOutput(data string, filepath string) (LoudnessLevel, error) {
 
 // LoudnessLevel represents the loudness data of a given song.
 type LoudnessLevel struct {
-	IntegratedLoudness, LoudnessRange, TruePeak float64
-	Filepath                                    string
+	IntegratedLoudness, LoudnessRange, TruePeakdB float64
+	Filepath                                      string
 }
 
 // String returns a textual representation of this struct.
@@ -105,8 +104,8 @@ func (ll LoudnessLevel) String() string {
 		"\nFilepath: %s\n"+
 			"Integrated loudness: %f LUFS\n"+
 			"Loudness Range: %f LU\n"+
-			"True peak: %f",
-		ll.Filepath, ll.IntegratedLoudness, ll.LoudnessRange, ll.TruePeak,
+			"True peak in dBFS: %f",
+		ll.Filepath, ll.IntegratedLoudness, ll.LoudnessRange, ll.TruePeakdB,
 	)
 }
 
@@ -117,8 +116,4 @@ func filterData(data string, filter *regexp.Regexp) (string, error) {
 	}
 
 	return resultWithSubgroups[len(resultWithSubgroups)-1][1], nil
-}
-
-func decibelToLinear(in float64) float64 {
-	return math.Pow(10.0, in/20)
 }
