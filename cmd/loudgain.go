@@ -7,10 +7,9 @@ import (
 	"github.com/Quik95/loudgain"
 )
 
-const filepath = "/tmp/song.mp3"
-
 func main() {
 	songs := os.Args[1:]
+	filepath := songs[0]
 	log.Println(songs)
 
 	ffmpegPath, err := loudgain.GetFFmpegPath()
@@ -25,10 +24,12 @@ func main() {
 		log.Fatalf("failed to get loudness ratings: %s", err)
 	}
 
-	ll, err := loudgain.ParseLounessOutput(loudness, filepath)
+	ll, err := loudgain.ParseLoudnessOutput(loudness, filepath)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	log.Println(ll)
+	log.Printf("Track Gain: %f", loudgain.PreventClippint(ll))
+	log.Printf("Track Peak: %f (%f dBFS)", loudgain.DecibelsToLinear(ll.TruePeakdB), ll.TruePeakdB)
+	log.Printf("Track Range: %f", ll.LoudnessRange)
 }
