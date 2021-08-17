@@ -1,3 +1,3 @@
 module github.com/Quik95/loudgain
 
-go 1.16
+go 1.17
