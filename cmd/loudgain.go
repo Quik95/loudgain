@@ -19,7 +19,7 @@ func main() {
 
 	log.Printf("ffmpeg is located at: %s", ffmpegPath)
 
-	loudness, err := loudgain.RunLoudnessScan(filepath)
+	loudness, err := loudgain.RunLoudnessScan(ffmpegPath, filepath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Fatalf("%s not found\n", filepath)

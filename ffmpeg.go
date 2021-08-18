@@ -50,13 +50,8 @@ func GetFFmpegPath() (string, error) {
 }
 
 // RunLoudnessScan runs ffmpeg ebur128 scan on a given file and captures it's output.
-func RunLoudnessScan(filepath string) (string, error) {
+func RunLoudnessScan(ffmpegPath, filepath string) (string, error) {
 	if err := checkFilename(filepath); err != nil {
-		return "", err
-	}
-
-	ffmpegPath, err := GetFFmpegPath()
-	if err != nil {
 		return "", err
 	}
 
@@ -76,7 +71,7 @@ func RunLoudnessScan(filepath string) (string, error) {
 	var output bytes.Buffer
 	cmd.Stderr = &output
 
-	if err = cmd.Run(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("%w: %s", err, output.String())
 	}
 
