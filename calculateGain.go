@@ -5,32 +5,52 @@ import (
 )
 
 // CalculateTrackGain applies gain based on measured loudness of the audio file relative to the reference level.
-func CalculateTrackGain(in float64) float64 {
+func CalculateTrackGain(in LoudnessUnit) LoudnessUnit {
 	const referenceLevel = -18
 
 	return referenceLevel - in
 }
 
-// DecibelsToLinear converts loudness in the dBTP unit to the linear 0..1 scale.
-func DecibelsToLinear(in float64) float64 {
-	return math.Pow(10, in/20)
+// ToLinear converts loudness in the dBTP unit to the linear 0..1 scale.
+func (d Decibel) ToLinear() LinearLoudness {
+	return LinearLoudness(math.Pow(10, float64(d)/20))
 }
 
-// LinearToDecibels converts loudness in the linear scale to the dBTP unit.
-func LinearToDecibels(in float64) float64 {
-	return math.Log10(in) * 20
+// ToLoudnessUnit converts Decibel to the LoudnessUnit.
+func (d Decibel) ToLoudnessUnit() LoudnessUnit {
+	return LoudnessUnit(d)
+}
+
+// ToDecibels converts loudness in the linear scale to the dBTP unit.
+func (l LinearLoudness) ToDecibels() Decibel {
+	return Decibel(math.Log10(float64(l)) * 20)
+}
+
+// ToLoudnessUnit converts LinearLoudness to the LoudnessUnit.
+func (l LinearLoudness) ToLoudnessUnit() LoudnessUnit {
+	return l.ToDecibels().ToLoudnessUnit()
+}
+
+// ToDecibels converts LoudnessUnit to the Decibel.
+func (l LoudnessUnit) ToDecibels() Decibel {
+	return Decibel(l)
+}
+
+// ToLinear converts LoudnessUnit to the LinearLoudness.
+func (l LoudnessUnit) ToLinear() LinearLoudness {
+	return l.ToDecibels().ToLinear()
 }
 
 // PreventClippint checks if after applying gain the clipping will occur, and lowers a track's peak if necessary.
-func PreventClippint(ll LoudnessLevel) float64 {
+func PreventClippint(ll LoudnessLevel) LoudnessUnit {
 	const pregain = 0
 
-	trackPeakLimit := DecibelsToLinear(-1.0)
+	trackPeakLimit := LoudnessUnit(-1.0).ToLinear()
 	trackGain := CalculateTrackGain(ll.IntegratedLoudness) + pregain
-	trackPeakAfterGain := DecibelsToLinear(trackGain) * DecibelsToLinear(ll.TruePeakdB)
+	trackPeakAfterGain := trackGain.ToLinear() * ll.TruePeakdB.ToLinear()
 
 	if trackPeakAfterGain > trackPeakLimit {
-		return trackGain - LinearToDecibels(trackPeakAfterGain/trackPeakLimit)
+		return trackGain - (trackPeakAfterGain / trackPeakLimit).ToLoudnessUnit()
 	}
 
 	return trackGain

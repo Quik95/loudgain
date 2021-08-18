@@ -15,6 +15,15 @@ var (
 	truePeakFilter           = regexp.MustCompile(`Peak:\s*(-?\d+\.?\d{1})\sdBFS`)
 )
 
+// Decibel type describes loudness in decibels.
+type Decibel float64
+
+// LinearLoudness type describes loudness as a linear scale ranging from 0 to 1.
+type LinearLoudness float64
+
+// LoudnessUnit type describes loudness in the LU or LUFS unit.
+type LoudnessUnit float64
+
 // NoMatchError indicates that parsing ffmpeg output did not result in obtaining an expected value.
 type NoMatchError struct {
 	Data string
@@ -97,9 +106,9 @@ func ParseLoudnessOutput(data string, filepath string) (LoudnessLevel, error) {
 	}
 
 	ll := LoudnessLevel{
-		IntegratedLoudness: integratedLoudnessFloat,
-		LoudnessRange:      loudnessRangeFloat,
-		TruePeakdB:         truePeakFloat,
+		IntegratedLoudness: LoudnessUnit(integratedLoudnessFloat),
+		LoudnessRange:      LoudnessUnit(loudnessRangeFloat),
+		TruePeakdB:         Decibel(truePeakFloat),
 		Filepath:           filepath,
 	}
 
@@ -108,8 +117,9 @@ func ParseLoudnessOutput(data string, filepath string) (LoudnessLevel, error) {
 
 // LoudnessLevel represents the loudness data of a given song.
 type LoudnessLevel struct {
-	IntegratedLoudness, LoudnessRange, TruePeakdB float64
-	Filepath                                      string
+	IntegratedLoudness, LoudnessRange LoudnessUnit
+	TruePeakdB                        Decibel
+	Filepath                          string
 }
 
 // String returns a textual representation of this struct.
