@@ -21,7 +21,11 @@ func main() {
 
 	loudness, err := loudgain.RunLoudnessScan(filepath)
 	if err != nil {
-		log.Fatalf("failed to get loudness ratings: %s", err)
+		if os.IsNotExist(err) {
+			log.Fatalf("%s not found\n", filepath)
+		} else {
+			log.Fatalf("an unknown error occurred while processing song %s\n", filepath)
+		}
 	}
 
 	ll, err := loudgain.ParseLoudnessOutput(loudness, filepath)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -33,6 +34,11 @@ func (e NoMatchError) Error() string {
 	return fmt.Sprintf("failed to match: %s", e.Data)
 }
 
+func checkFilename(filename string) error {
+	_, err := os.Stat(filename)
+	return err
+}
+
 // GetFFmpegPath gets the location of an ffmpeg binary in the system.
 func GetFFmpegPath() (string, error) {
 	path, err := exec.LookPath("ffmpeg")
@@ -45,6 +51,10 @@ func GetFFmpegPath() (string, error) {
 
 // RunLoudnessScan runs ffmpeg ebur128 scan on a given file and captures it's output.
 func RunLoudnessScan(filepath string) (string, error) {
+	if err := checkFilename(filepath); err != nil {
+		return "", err
+	}
+
 	ffmpegPath, err := GetFFmpegPath()
 	if err != nil {
 		return "", err
