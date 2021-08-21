@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -8,9 +9,14 @@ import (
 )
 
 func main() {
+	const (
+		referenceLoudness = -18
+		trackPeakLimit    = -1
+		pregain           = 0
+	)
+
 	songs := os.Args[1:]
 	filepath := songs[0]
-	log.Println(songs)
 
 	ffmpegPath, err := loudgain.GetFFmpegPath()
 	if err != nil {
@@ -33,7 +39,18 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	log.Printf("Track Gain: %s", loudgain.PreventClippint(ll))
-	log.Printf("Track Peak: %f (%s)", ll.TruePeakdB.ToLinear(), ll.TruePeakdB)
-	log.Printf("Track Range: %s", ll.LoudnessRange)
+	trackGain := loudgain.CalculateTrackGain(ll.IntegratedLoudness, referenceLoudness, pregain)
+	trackGain = loudgain.PreventClipping(ll.TruePeakdB, trackGain, trackPeakLimit)
+
+	res := loudgain.ScanResult{
+		FilePath:          filepath,
+		TrackGain:         trackGain.ToDecibels(),
+		TrackRange:        ll.LoudnessRange.ToDecibels(),
+		ReferenceLoudness: loudgain.LoudnessUnit(referenceLoudness),
+		TrackPeak:         ll.TruePeakdB.ToLinear(),
+		Loudness:          ll.IntegratedLoudness,
+	}
+
+	fmt.Println(res)
+
 }

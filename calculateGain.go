@@ -1,14 +1,13 @@
 package loudgain
 
 import (
+	"fmt"
 	"math"
 )
 
 // CalculateTrackGain applies gain based on measured loudness of the audio file relative to the reference level.
-func CalculateTrackGain(in LoudnessUnit) LoudnessUnit {
-	const referenceLevel = -18
-
-	return referenceLevel - in
+func CalculateTrackGain(loudness, referenceLevel, pregain LoudnessUnit) LoudnessUnit {
+	return referenceLevel - loudness + pregain
 }
 
 // ToLinear converts loudness in the dBTP unit to the linear 0..1 scale.
@@ -41,17 +40,31 @@ func (l LoudnessUnit) ToLinear() LinearLoudness {
 	return l.ToDecibels().ToLinear()
 }
 
-// PreventClippint checks if after applying gain the clipping will occur, and lowers a track's peak if necessary.
-func PreventClippint(ll LoudnessLevel) LoudnessUnit {
-	const pregain = 0
+// PreventClipping checks if after applying gain the clipping will occur, and lowers a track's peak if necessary.
+func PreventClipping(trackPeak Decibel, trackGain, trackPeakLimit LoudnessUnit) LoudnessUnit {
+	trackPeakAfterGain := trackGain.ToLinear() * trackPeak.ToLinear()
 
-	trackPeakLimit := LoudnessUnit(-1.0).ToLinear()
-	trackGain := CalculateTrackGain(ll.IntegratedLoudness) + pregain
-	trackPeakAfterGain := trackGain.ToLinear() * ll.TruePeakdB.ToLinear()
-
-	if trackPeakAfterGain > trackPeakLimit {
-		return trackGain - (trackPeakAfterGain / trackPeakLimit).ToLoudnessUnit()
+	if trackPeakAfterGain > trackPeakLimit.ToLinear() {
+		return trackGain - (trackPeakAfterGain / trackPeakLimit.ToLinear()).ToLoudnessUnit()
 	}
 
 	return trackGain
+}
+
+// ScanResult contains the results of scanning an audio file and applying gain to it.
+type ScanResult struct {
+	FilePath                    string
+	TrackGain, TrackRange       Decibel
+	ReferenceLoudness, Loudness LoudnessUnit
+	TrackPeak                   LinearLoudness
+}
+
+func (s ScanResult) String() string {
+	return fmt.Sprintf(
+		"Filepath: %s\n"+
+			"Loudness: %8.2f LUFS\n"+
+			"Range: %12s\n"+
+			"Peak: %14f (%f dBTP)\n"+
+			"Gain: %14s\n",
+		s.FilePath, s.Loudness, s.TrackRange, s.TrackPeak, s.TrackPeak.ToDecibels(), s.TrackGain)
 }
