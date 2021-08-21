@@ -33,7 +33,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	log.Printf("Track Gain: %f", loudgain.PreventClippint(ll))
-	log.Printf("Track Peak: %f (%f dBFS)", ll.TruePeakdB.ToLinear(), ll.TruePeakdB)
-	log.Printf("Track Range: %f", ll.LoudnessRange)
+	log.Printf("Track Gain: %s", loudgain.PreventClippint(ll))
+	log.Printf("Track Peak: %f (%s)", ll.TruePeakdB.ToLinear(), ll.TruePeakdB)
+	log.Printf("Track Range: %s", ll.LoudnessRange)
 }

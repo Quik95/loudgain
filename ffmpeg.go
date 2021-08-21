@@ -19,11 +19,19 @@ var (
 // Decibel type describes loudness in decibels.
 type Decibel float64
 
+func (d Decibel) String() string {
+	return fmt.Sprintf("%f dB", d)
+}
+
 // LinearLoudness type describes loudness as a linear scale ranging from 0 to 1.
 type LinearLoudness float64
 
 // LoudnessUnit type describes loudness in the LU or LUFS unit.
 type LoudnessUnit float64
+
+func (l LoudnessUnit) String() string {
+	return fmt.Sprintf("%f LU", l)
+}
 
 // NoMatchError indicates that parsing ffmpeg output did not result in obtaining an expected value.
 type NoMatchError struct {
@@ -36,6 +44,7 @@ func (e NoMatchError) Error() string {
 
 func checkFilename(filename string) error {
 	_, err := os.Stat(filename)
+
 	return err
 }
 
@@ -132,7 +141,7 @@ func (ll LoudnessLevel) String() string {
 	return fmt.Sprintf(
 		"\nFilepath: %s\n"+
 			"Integrated loudness: %f LUFS\n"+
-			"Loudness Range: %f LU\n"+
+			"Loudness Range: %s\n"+
 			"True peak in dBFS: %f",
 		ll.Filepath, ll.IntegratedLoudness, ll.LoudnessRange, ll.TruePeakdB,
 	)
