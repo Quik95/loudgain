@@ -20,17 +20,17 @@ func main() {
 
 	ffmpegPath, err := loudgain.GetFFmpegPath()
 	if err != nil {
-		log.Fatalln("ffmpeg not found in path")
+		log.Fatalln("an ffmpeg binary not found in the path")
 	}
 
-	log.Printf("ffmpeg is located at: %s", ffmpegPath)
+	log.Printf("the ffmpeg binary is located at: %s", ffmpegPath)
 
 	loudness, err := loudgain.RunLoudnessScan(ffmpegPath, filepath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Fatalf("%s not found\n", filepath)
 		} else {
-			log.Fatalf("an unknown error occurred while processing song %s\n", filepath)
+			log.Fatalf("an unknown error has occurred while processing song %s\n", filepath)
 		}
 	}
 
