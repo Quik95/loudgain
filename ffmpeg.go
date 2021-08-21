@@ -20,7 +20,7 @@ var (
 type Decibel float64
 
 func (d Decibel) String() string {
-	return fmt.Sprintf("%f dB", d)
+	return fmt.Sprintf("%.2f dB", d)
 }
 
 // LinearLoudness type describes loudness as a linear scale ranging from 0 to 1.
@@ -30,7 +30,7 @@ type LinearLoudness float64
 type LoudnessUnit float64
 
 func (l LoudnessUnit) String() string {
-	return fmt.Sprintf("%f LU", l)
+	return fmt.Sprintf("%.2f LU", l)
 }
 
 // NoMatchError indicates that parsing ffmpeg output did not result in obtaining an expected value.
