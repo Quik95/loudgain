@@ -2,71 +2,54 @@ package loudgain
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
+// WriteMeta writes converts data provided by the scan argument to their replaygain tag representation.  It then writes these tag to a copy of the original file.
+// Next it prepands backup- to the original file and renames the copy to the original.
+// When all this finishes successfully, this function removes the original file.
+// In case of an error the original file is renamed back to it's initial name, and the copy is deleted.
 func WriteMetadata(ffmpegPath string, scan ScanResult) error {
-	tempFile, err := createSwapFile(scan.FilePath)
-	if err != nil {
+	tempFile := prependToBase(scan.FilePath, "loudgain-")
+
+	if err := ffmpegWriteMetadata(scan, ffmpegPath, tempFile); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
-
-	if err = ffmpegWriteMetadata(scan, ffmpegPath, tempFile); err != nil {
-		return fmt.Errorf("failed to write metadata: %w", err)
-	}
-	defer os.Remove(tempFile)
-
-	log.Printf("outfile: %s", tempFile)
-
 	if err := swapFiles(scan.FilePath, tempFile); err != nil {
+		if err2 := os.Remove(tempFile); err2 != nil {
+			return fmt.Errorf("failed to remove tempFile after an error: %w\n%v", err, err2)
+		}
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
 	return nil
+}
+
+func prependToBase(in, prefix string) string {
+	directory := filepath.Dir(in)
+	base := filepath.Base(in)
+
+	return filepath.Join(directory, prefix+base)
 }
 
 func swapFiles(original, swap string) error {
-	directory := filepath.Dir(original)
-	swapFileSameDirectoryAsOriginal := filepath.Join(directory, filepath.Base(swap))
-
-	if err := copyFile(swap, swapFileSameDirectoryAsOriginal); err != nil {
-		return fmt.Errorf("failed to swap files: %w", err)
-	}
-
-	backupName := filepath.Join(filepath.Dir(original), "loudgain-"+filepath.Base(original))
+	backupName := prependToBase(original, "backup-")
 	if err := os.Rename(original, backupName); err != nil {
 		return fmt.Errorf("failed to swap files: %w", err)
 	}
-
-	if err := os.Rename(swapFileSameDirectoryAsOriginal, original); err != nil {
+	if err := os.Rename(swap, original); err != nil {
+		if err2 := os.Rename(backupName, original); err2 != nil {
+			return fmt.Errorf("failed to recover from the error: %w\n%v", err, err2)
+		}
 		return fmt.Errorf("failed to swap files: %w", err)
 	}
-
 	if err := os.Remove(backupName); err != nil {
 		return fmt.Errorf("failed to remove the backup file: %w", err)
-	}
-
-	return nil
-}
-
-func copyFile(input, destination string) error {
-	in, err := ioutil.ReadFile(input)
-	if err != nil {
-		return fmt.Errorf("failed to read from a file: %w", err)
-	}
-
-	if err := ioutil.WriteFile(destination, in, 0644); err != nil {
-		return fmt.Errorf("failed to open a file for writing: %w", err)
 	}
 
 	return nil
@@ -115,20 +98,4 @@ func getExtension(filename string) (string, error) {
 	}
 
 	return ext, nil
-}
-
-func createSwapFile(filename string) (string, error) {
-	ext, err := getExtension(filename)
-	if err != nil {
-		return "", fmt.Errorf("failed get swap file name: %w", err)
-	}
-
-	songName := strings.TrimSuffix(filepath.Base(filename), ext)
-
-	h := md5.New()
-	io.WriteString(h, songName)
-
-	// swapFile := filepath.Join(os.TempDir(), hex.EncodeToString(h.Sum(nil))+ ext)
-	swapFile := filepath.Join("/tmp/loudgain", hex.EncodeToString(h.Sum(nil))+ext)
-	return swapFile, nil
 }
