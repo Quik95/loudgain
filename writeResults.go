@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -23,14 +24,57 @@ func WriteMetadata(ffmpegPath string, scan ScanResult) error {
 	if err = ffmpegWriteMetadata(scan, ffmpegPath, tempFile); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
+	defer os.Remove(tempFile)
 
 	log.Printf("outfile: %s", tempFile)
+
+	if err := swapFiles(scan.FilePath, tempFile); err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+
+	return nil
+}
+
+func swapFiles(original, swap string) error {
+	directory := filepath.Dir(original)
+	swapFileSameDirectoryAsOriginal := filepath.Join(directory, filepath.Base(swap))
+
+	if err := copyFile(swap, swapFileSameDirectoryAsOriginal); err != nil {
+		return fmt.Errorf("failed to swap files: %w", err)
+	}
+
+	backupName := filepath.Join(filepath.Dir(original), "loudgain-"+filepath.Base(original))
+	if err := os.Rename(original, backupName); err != nil {
+		return fmt.Errorf("failed to swap files: %w", err)
+	}
+
+	if err := os.Rename(swapFileSameDirectoryAsOriginal, original); err != nil {
+		return fmt.Errorf("failed to swap files: %w", err)
+	}
+
+	if err := os.Remove(backupName); err != nil {
+		return fmt.Errorf("failed to remove the backup file: %w", err)
+	}
+
+	return nil
+}
+
+func copyFile(input, destination string) error {
+	in, err := ioutil.ReadFile(input)
+	if err != nil {
+		return fmt.Errorf("failed to read from a file: %w", err)
+	}
+
+	if err := ioutil.WriteFile(destination, in, 0644); err != nil {
+		return fmt.Errorf("failed to open a file for writing: %w", err)
+	}
 
 	return nil
 }
 
 func ffmpegWriteMetadata(metadata ScanResult, ffmpegPath, swapFile string) error {
 	args := []string{
+		"-hide_banner",
 		"-i",
 		metadata.FilePath,
 		"-map",
@@ -84,6 +128,7 @@ func createSwapFile(filename string) (string, error) {
 	h := md5.New()
 	io.WriteString(h, songName)
 
-	swapFile := filepath.Join(os.TempDir(), hex.EncodeToString(h.Sum(nil)), ext)
+	// swapFile := filepath.Join(os.TempDir(), hex.EncodeToString(h.Sum(nil))+ ext)
+	swapFile := filepath.Join("/tmp/loudgain", hex.EncodeToString(h.Sum(nil))+ext)
 	return swapFile, nil
 }

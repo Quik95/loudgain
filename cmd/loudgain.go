@@ -52,5 +52,7 @@ func main() {
 	}
 
 	fmt.Println(res)
-	loudgain.WriteMetadata(ffmpegPath, res)
+	if err := loudgain.WriteMetadata(ffmpegPath, res); err != nil {
+		log.Println(err)
+	}
 }
