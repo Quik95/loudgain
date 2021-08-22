@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -8,14 +9,30 @@ import (
 	"github.com/Quik95/loudgain"
 )
 
+var (
+	flagPeakLimit, flagPregain float64
+)
+
+func init() {
+	flag.Float64Var(&flagPeakLimit, "maxtpl", -1.0, "Maximal true peak level in dBTP")
+	flag.Float64Var(&flagPregain, "pregain", 0.0, "Apply n dB/LU pre-gain value")
+
+	flag.Parse()
+}
+
 func main() {
 	var (
 		referenceLoudness loudgain.LoudnessUnit = -18
-		trackPeakLimit    loudgain.LoudnessUnit = -1
-		pregain           loudgain.LoudnessUnit = 0
+		trackPeakLimit                          = loudgain.Decibel(flagPeakLimit)
+		pregain                                 = loudgain.LoudnessUnit(flagPregain)
 	)
 
-	songs := os.Args[1:]
+	songs := flag.Args()
+	if len(songs) == 0 {
+		fmt.Println("No files to process. Exitting...")
+		os.Exit(1)
+	}
+
 	filepath := songs[0]
 
 	ffmpegPath, err := loudgain.GetFFmpegPath()

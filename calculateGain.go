@@ -41,7 +41,7 @@ func (l LoudnessUnit) ToLinear() LinearLoudness {
 }
 
 // PreventClipping checks if after applying gain the clipping will occur, and lowers a track's peak if necessary.
-func PreventClipping(trackPeak Decibel, trackGain, trackPeakLimit LoudnessUnit) LoudnessUnit {
+func PreventClipping(trackPeak Decibel, trackGain LoudnessUnit, trackPeakLimit Decibel) LoudnessUnit {
 	trackPeakAfterGain := trackGain.ToLinear() * trackPeak.ToLinear()
 
 	if trackPeakAfterGain > trackPeakLimit.ToLinear() {
