@@ -33,12 +33,12 @@ func (l LoudnessUnit) String() string {
 	return fmt.Sprintf("%.2f LU", l)
 }
 
-// NoMatchError indicates that parsing ffmpeg output did not result in obtaining an expected value.
-type NoMatchError struct {
+// ErrNoMatch indicates that parsing ffmpeg output did not result in obtaining an expected value.
+type ErrNoMatch struct {
 	Data string
 }
 
-func (e NoMatchError) Error() string {
+func (e ErrNoMatch) Error() string {
 	return fmt.Sprintf("failed to match: %s", e.Data)
 }
 
@@ -150,7 +150,7 @@ func (ll LoudnessLevel) String() string {
 func filterData(data string, filter *regexp.Regexp) (string, error) {
 	resultWithSubgroups := filter.FindAllStringSubmatch(data, -1)
 	if resultWithSubgroups == nil {
-		return "", NoMatchError{Data: data}
+		return "", ErrNoMatch{Data: data}
 	}
 
 	return resultWithSubgroups[len(resultWithSubgroups)-1][1], nil
