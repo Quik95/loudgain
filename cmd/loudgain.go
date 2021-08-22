@@ -9,10 +9,10 @@ import (
 )
 
 func main() {
-	const (
-		referenceLoudness = -18
-		trackPeakLimit    = -1
-		pregain           = 0
+	var (
+		referenceLoudness loudgain.LoudnessUnit = -18
+		trackPeakLimit    loudgain.LoudnessUnit = -1
+		pregain           loudgain.LoudnessUnit = 0
 	)
 
 	songs := os.Args[1:]
@@ -52,5 +52,5 @@ func main() {
 	}
 
 	fmt.Println(res)
-
+	loudgain.WriteMetadata(ffmpegPath, res)
 }
