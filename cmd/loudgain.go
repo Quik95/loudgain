@@ -11,13 +11,35 @@ import (
 
 var (
 	flagPeakLimit, flagPregain float64
+	noClip                     bool
+	tagMode                    string
 )
 
 func init() {
 	flag.Float64Var(&flagPeakLimit, "maxtpl", -1.0, "Maximal true peak level in dBTP")
 	flag.Float64Var(&flagPregain, "pregain", 0.0, "Apply n dB/LU pre-gain value")
 
+	flag.BoolVar(&noClip, "noclip", false, "Lower track gain to avoid clipping.")
+	flag.StringVar(&tagMode, "tagmode", "s",
+		"--tagmode=d Delete ReplayGain tags from files. (uninmplemented)\n"+
+			"--tagmode=i Write Replaygain 2.0 tags to files.\n"+
+			"--tagmode=e like --tagmode=i, plus extra tags (reference, ranges).\n"+
+			"--tagmode=l like --tagmode=e, but LU units instead of dB.\n"+
+			"--tagmode=s Don't write Replaygain tags.")
+
 	flag.Parse()
+}
+
+func checkExitCondition(tagMode loudgain.WriteMode) {
+	if flag.NArg() == 0 {
+		fmt.Println("No files to process. Exitting...")
+		os.Exit(1)
+	}
+
+	if tagMode == loudgain.InvalidWriteMode {
+		fmt.Println("Invalid write mode. Exitting...")
+		os.Exit(1)
+	}
 }
 
 func main() {
@@ -25,14 +47,12 @@ func main() {
 		referenceLoudness loudgain.LoudnessUnit = -18
 		trackPeakLimit                          = loudgain.Decibel(flagPeakLimit)
 		pregain                                 = loudgain.LoudnessUnit(flagPregain)
+		tagMode                                 = loudgain.StringToWriteMode(tagMode)
 	)
 
-	songs := flag.Args()
-	if len(songs) == 0 {
-		fmt.Println("No files to process. Exitting...")
-		os.Exit(1)
-	}
+	checkExitCondition(tagMode)
 
+	songs := flag.Args()
 	filepath := songs[0]
 
 	ffmpegPath, err := loudgain.GetFFmpegPath()
@@ -57,19 +77,24 @@ func main() {
 	}
 
 	trackGain := loudgain.CalculateTrackGain(ll.IntegratedLoudness, referenceLoudness, pregain)
-	trackGain = loudgain.PreventClipping(ll.TruePeakdB, trackGain, trackPeakLimit)
+	if noClip {
+		trackGain = loudgain.PreventClipping(ll.TruePeakdB, trackGain, trackPeakLimit)
+	}
 
 	res := loudgain.ScanResult{
 		FilePath:          filepath,
 		TrackGain:         trackGain.ToDecibels(),
 		TrackRange:        ll.LoudnessRange.ToDecibels(),
-		ReferenceLoudness: loudgain.LoudnessUnit(referenceLoudness),
+		ReferenceLoudness: referenceLoudness,
 		TrackPeak:         ll.TruePeakdB.ToLinear(),
 		Loudness:          ll.IntegratedLoudness,
 	}
 
 	fmt.Println(res)
-	if err := loudgain.WriteMetadata(ffmpegPath, res); err != nil {
-		log.Println(err)
+
+	if tagMode != loudgain.SkipWritingTags {
+		if err := loudgain.WriteMetadata(ffmpegPath, res, tagMode); err != nil {
+			log.Println(err)
+		}
 	}
 }

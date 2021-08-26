@@ -14,10 +14,10 @@ import (
 // Next it prepands backup- to the original file and renames the copy to the original.
 // When all this finishes successfully, this function removes the original file.
 // In case of an error the original file is renamed back to it's initial name, and the copy is deleted.
-func WriteMetadata(ffmpegPath string, scan ScanResult) error {
+func WriteMetadata(ffmpegPath string, scan ScanResult, tagMode WriteMode) error {
 	tempFile := prependToBase(scan.FilePath, "loudgain-")
 
-	if err := ffmpegWriteMetadata(scan, ffmpegPath, tempFile); err != nil {
+	if err := ffmpegWriteMetadata(scan, ffmpegPath, tempFile, tagMode); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 	if err := swapFiles(scan.FilePath, tempFile); err != nil {
@@ -55,8 +55,8 @@ func swapFiles(original, swap string) error {
 	return nil
 }
 
-func ffmpegWriteMetadata(metadata ScanResult, ffmpegPath, swapFile string) error {
-	args := []string{
+func getFFmpegArgs(metadata ScanResult, swapFile string, mode WriteMode) []string {
+	base := []string{
 		"-hide_banner",
 		"-i",
 		metadata.FilePath,
@@ -67,16 +67,48 @@ func ffmpegWriteMetadata(metadata ScanResult, ffmpegPath, swapFile string) error
 		"copy",
 		"-write_id3v2",
 		"1",
-		"-metadata",
-		fmt.Sprintf("replaygain_track_gain=%.2f dB", metadata.TrackGain),
-		"-metadata",
-		fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
-		"-metadata",
-		fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
-		"-metadata",
-		fmt.Sprintf("replaygain_track_range=%.2f dB", metadata.TrackRange),
-		swapFile,
 	}
+
+	switch mode {
+	case WriteRG2:
+		base = append(base, []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_track_gain=%.2f dB", metadata.TrackGain),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
+		}...)
+	case ExtraTags:
+		base = append(base, []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_track_gain=%.2f dB", metadata.TrackGain),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
+			"-metadata",
+			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_range=%.2f dB", metadata.TrackRange),
+		}...)
+	case ExtraTagsLU:
+		base = append(base, []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_track_gain=%.2f LUFS", metadata.TrackGain.ToLoudnessUnit()),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
+			"-metadata",
+			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_range=%.2f LU", metadata.TrackRange.ToLoudnessUnit()),
+		}...)
+	}
+
+	// don't forget to include output path as the last item
+	base = append(base, swapFile)
+
+	return base
+}
+
+func ffmpegWriteMetadata(metadata ScanResult, ffmpegPath, swapFile string, mode WriteMode) error {
+	args := getFFmpegArgs(metadata, swapFile, mode)
 
 	cmd := exec.Command(ffmpegPath, args...)
 	log.Println(cmd.String())
