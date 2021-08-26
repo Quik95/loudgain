@@ -3,7 +3,6 @@ package loudgain
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -75,7 +74,6 @@ func RunLoudnessScan(ffmpegPath, filepath string) (string, error) {
 		"null",
 		"-",
 	)
-	log.Println(cmd.String())
 
 	var output bytes.Buffer
 	cmd.Stderr = &output
