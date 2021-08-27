@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
+	"runtime"
 
 	"github.com/Quik95/loudgain"
 )
@@ -32,69 +32,55 @@ func init() {
 
 func checkExitCondition(tagMode loudgain.WriteMode) {
 	if flag.NArg() == 0 {
-		fmt.Println("No files to process. Exitting...")
-		os.Exit(1)
+		log.Fatalln("No files to process. Exitting...")
 	}
 
 	if tagMode == loudgain.InvalidWriteMode {
-		fmt.Println("Invalid write mode. Exitting...")
-		os.Exit(1)
+		log.Fatalln("Invalid write mode. Exitting...")
 	}
 }
 
 func main() {
-	var (
-		referenceLoudness loudgain.LoudnessUnit = -18
-		trackPeakLimit                          = loudgain.Decibel(flagPeakLimit)
-		pregain                                 = loudgain.LoudnessUnit(flagPregain)
-		tagMode                                 = loudgain.StringToWriteMode(tagMode)
-	)
-
-	checkExitCondition(tagMode)
-
-	songs := flag.Args()
-	filepath := songs[0]
+	var numberOfWorkers = runtime.NumCPU()
 
 	ffmpegPath, err := loudgain.GetFFmpegPath()
 	if err != nil {
 		log.Fatalln("an ffmpeg binary not found in the path")
 	}
 
-	log.Printf("the ffmpeg binary is located at: %s", ffmpegPath)
+	loudgain.ReferenceLoudness = -18
+	loudgain.TrackPeakLimit = loudgain.Decibel(flagPeakLimit)
+	loudgain.Pregain = loudgain.LoudnessUnit(flagPregain)
+	loudgain.TagMode = loudgain.StringToWriteMode(tagMode)
+	loudgain.NoClip = noClip
+	loudgain.FFmpegPath = ffmpegPath
 
-	loudness, err := loudgain.RunLoudnessScan(ffmpegPath, filepath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Fatalf("%s not found\n", filepath)
-		} else {
-			log.Fatalf("an unknown error has occurred while processing song %s\n", filepath)
-		}
+	checkExitCondition(loudgain.TagMode)
+
+	songs := flag.Args()
+
+	numberOfJobs := len(songs)
+	jobs := make(chan string, numberOfJobs)
+	results := make(chan loudgain.ScanResult, numberOfJobs)
+
+	for i := 0; i < numberOfWorkers; i++ {
+		go worker(jobs, results)
 	}
 
-	ll, err := loudgain.ParseLoudnessOutput(loudness, filepath)
-	if err != nil {
-		log.Fatalln(err)
+	for _, song := range songs {
+		jobs <- song
 	}
 
-	trackGain := loudgain.CalculateTrackGain(ll.IntegratedLoudness, referenceLoudness, pregain)
-	if noClip {
-		trackGain = loudgain.PreventClipping(ll.TruePeakdB, trackGain, trackPeakLimit)
+	for i := 0; i < numberOfJobs; i++ {
+		fmt.Println(<-results)
 	}
 
-	res := loudgain.ScanResult{
-		FilePath:          filepath,
-		TrackGain:         trackGain.ToDecibels(),
-		TrackRange:        ll.LoudnessRange.ToDecibels(),
-		ReferenceLoudness: referenceLoudness,
-		TrackPeak:         ll.TruePeakdB.ToLinear(),
-		Loudness:          ll.IntegratedLoudness,
-	}
+	close(jobs)
+}
 
-	fmt.Println(res)
-
-	if tagMode != loudgain.SkipWritingTags {
-		if err := loudgain.WriteMetadata(ffmpegPath, res, tagMode); err != nil {
-			log.Println(err)
-		}
+func worker(jobs <-chan string, results chan<- loudgain.ScanResult) {
+	for job := range jobs {
+		res := loudgain.ScanFile(job)
+		results <- res
 	}
 }

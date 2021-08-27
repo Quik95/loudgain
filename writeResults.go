@@ -2,9 +2,7 @@ package loudgain
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,13 +15,15 @@ import (
 func WriteMetadata(ffmpegPath string, scan ScanResult, tagMode WriteMode) error {
 	tempFile := prependToBase(scan.FilePath, "loudgain-")
 
-	if err := ffmpegWriteMetadata(scan, ffmpegPath, tempFile, tagMode); err != nil {
+	if err := ffmpegWriteMetadata(scan, FFmpegPath, tempFile, tagMode); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
+
 	if err := swapFiles(scan.FilePath, tempFile); err != nil {
 		if err2 := os.Remove(tempFile); err2 != nil {
 			return fmt.Errorf("failed to remove tempFile after an error: %w\n%v", err, err2)
 		}
+
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -42,12 +42,15 @@ func swapFiles(original, swap string) error {
 	if err := os.Rename(original, backupName); err != nil {
 		return fmt.Errorf("failed to swap files: %w", err)
 	}
+
 	if err := os.Rename(swap, original); err != nil {
 		if err2 := os.Rename(backupName, original); err2 != nil {
 			return fmt.Errorf("failed to recover from the error: %w\n%v", err, err2)
 		}
+
 		return fmt.Errorf("failed to swap files: %w", err)
 	}
+
 	if err := os.Remove(backupName); err != nil {
 		return fmt.Errorf("failed to remove the backup file: %w", err)
 	}
@@ -99,6 +102,7 @@ func getFFmpegArgs(metadata ScanResult, swapFile string, mode WriteMode) []strin
 			"-metadata",
 			fmt.Sprintf("replaygain_track_range=%.2f LU", metadata.TrackRange.ToLoudnessUnit()),
 		}...)
+	case DeleteTags, InvalidWriteMode, SkipWritingTags:
 	}
 
 	// don't forget to include output path as the last item
@@ -110,8 +114,7 @@ func getFFmpegArgs(metadata ScanResult, swapFile string, mode WriteMode) []strin
 func ffmpegWriteMetadata(metadata ScanResult, ffmpegPath, swapFile string, mode WriteMode) error {
 	args := getFFmpegArgs(metadata, swapFile, mode)
 
-	cmd := exec.Command(ffmpegPath, args...)
-	log.Println(cmd.String())
+	cmd := exec.Command(FFmpegPath, args...)
 
 	var output bytes.Buffer
 	cmd.Stderr = &output
@@ -121,13 +124,4 @@ func ffmpegWriteMetadata(metadata ScanResult, ffmpegPath, swapFile string, mode 
 	}
 
 	return nil
-}
-
-func getExtension(filename string) (string, error) {
-	ext := filepath.Ext(filename)
-	if ext == "" {
-		return "", errors.New("invalid extension")
-	}
-
-	return ext, nil
 }

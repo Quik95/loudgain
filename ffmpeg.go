@@ -58,13 +58,13 @@ func GetFFmpegPath() (string, error) {
 }
 
 // RunLoudnessScan runs ffmpeg ebur128 scan on a given file and captures it's output.
-func RunLoudnessScan(ffmpegPath, filepath string) (string, error) {
+func RunLoudnessScan(filepath string) (string, error) {
 	if err := checkFilename(filepath); err != nil {
 		return "", err
 	}
 
 	cmd := exec.Command(
-		ffmpegPath,
+		FFmpegPath,
 		"-hide_banner",
 		"-i",
 		filepath,
