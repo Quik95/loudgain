@@ -13,12 +13,13 @@ var (
 	flagPeakLimit, flagPregain float64
 	noClip                     bool
 	tagMode                    string
+	numberOfWorkers            int
 )
 
 func init() {
 	flag.Float64Var(&flagPeakLimit, "maxtpl", -1.0, "Maximal true peak level in dBTP")
 	flag.Float64Var(&flagPregain, "pregain", 0.0, "Apply n dB/LU pre-gain value")
-
+	flag.IntVar(&numberOfWorkers, "workers", runtime.NumCPU(), "Number of workers scanning songs in parallel.")
 	flag.BoolVar(&noClip, "noclip", false, "Lower track gain to avoid clipping.")
 	flag.StringVar(&tagMode, "tagmode", "s",
 		"--tagmode=d Delete ReplayGain tags from files. (uninmplemented)\n"+
@@ -41,8 +42,6 @@ func checkExitCondition(tagMode loudgain.WriteMode) {
 }
 
 func main() {
-	var numberOfWorkers = runtime.NumCPU()
-
 	ffmpegPath, err := loudgain.GetFFmpegPath()
 	if err != nil {
 		log.Fatalln("an ffmpeg binary not found in the path")
