@@ -45,7 +45,7 @@ func checkExitCondition(tagMode loudgain.WriteMode) error {
 	return nil
 }
 
-func main() {
+func setGlobals() {
 	ffmpegPath, err := loudgain.GetFFmpegPath()
 	if err != nil {
 		log.Fatalln("an ffmpeg binary not found in the path")
@@ -57,14 +57,18 @@ func main() {
 	loudgain.TagMode = loudgain.StringToWriteMode(tagMode)
 	loudgain.NoClip = noClip
 	loudgain.FFmpegPath = ffmpegPath
+}
 
+func main() {
 	if err := checkExitCondition(loudgain.TagMode); err != nil {
 		log.Fatal(err)
 	}
 
-	songs := flag.Args()
+	setGlobals()
 
+	songs := flag.Args()
 	numberOfJobs := len(songs)
+
 	jobs := make(chan string, numberOfJobs)
 	results := make(chan loudgain.ScanResult, numberOfJobs)
 
