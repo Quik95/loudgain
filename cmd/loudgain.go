@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -32,14 +33,16 @@ func init() {
 	flag.Parse()
 }
 
-func checkExitCondition(tagMode loudgain.WriteMode) {
+func checkExitCondition(tagMode loudgain.WriteMode) error {
 	if flag.NArg() == 0 {
-		log.Fatalln("No files to process. Exitting...")
+		return errors.New("No files to process. Exitting...")
 	}
 
 	if tagMode == loudgain.InvalidWriteMode {
-		log.Fatalln("Invalid write mode. Exitting...")
+		return errors.New("Invalid write mode. Exitting...")
 	}
+
+	return nil
 }
 
 func main() {
@@ -55,7 +58,9 @@ func main() {
 	loudgain.NoClip = noClip
 	loudgain.FFmpegPath = ffmpegPath
 
-	checkExitCondition(loudgain.TagMode)
+	if err := checkExitCondition(loudgain.TagMode); err != nil {
+		log.Fatal(err)
+	}
 
 	songs := flag.Args()
 
