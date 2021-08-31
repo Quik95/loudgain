@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os/exec"
 	"runtime"
 
 	"github.com/Quik95/loudgain"
@@ -47,7 +48,7 @@ func checkExitCondition(tagMode loudgain.WriteMode) error {
 }
 
 func setGlobals() error {
-	ffmpegPath, err := loudgain.GetFFmpegPath()
+	ffmpegPath, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		return errors.New("an ffmpeg binary not found in the path")
 	}
