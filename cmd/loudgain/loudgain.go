@@ -14,7 +14,7 @@ import (
 
 var (
 	flagPeakLimit, flagPregain float64
-	noClip, quiet              bool
+	noClip, quiet, album       bool
 	tagMode                    string
 	numberOfWorkers            int
 )
@@ -25,6 +25,7 @@ func init() {
 	flag.IntVar(&numberOfWorkers, "workers", runtime.NumCPU(), "Number of workers scanning songs in parallel.")
 	flag.BoolVar(&quiet, "quiet", false, "Supress output.")
 	flag.BoolVar(&noClip, "noclip", false, "Lower track gain to avoid clipping.")
+	flag.BoolVar(&album, "album", true, "Also calculate replaygain values for album.")
 	flag.StringVar(&tagMode, "tagmode", "s",
 		"--tagmode=d Delete ReplayGain tags from files. (uninmplemented)\n"+
 			"--tagmode=i Write Replaygain 2.0 tags to files.\n"+
@@ -53,17 +54,25 @@ func setGlobals() error {
 		return errors.New("an ffmpeg binary not found in the path")
 	}
 
+	ffprobePath, err := exec.LookPath("ffprobe")
+	if err != nil {
+		return errors.New("an ffprobe binary not found in the path")
+	}
+
 	loudgain.ReferenceLoudness = -18
 	loudgain.TrackPeakLimit = loudgain.Decibel(flagPeakLimit)
 	loudgain.Pregain = loudgain.LoudnessUnit(flagPregain)
 	loudgain.TagMode = loudgain.StringToWriteMode(tagMode)
 	loudgain.NoClip = noClip
 	loudgain.FFmpegPath = ffmpegPath
+	loudgain.FFprobePath = ffprobePath
+	loudgain.WorkersLimit = numberOfWorkers
 
 	return nil
 }
 
 func main() {
+
 	if err := checkExitCondition(loudgain.TagMode); err != nil {
 		log.Fatal(err)
 	}
@@ -75,10 +84,15 @@ func main() {
 	songs := flag.Args()
 	numberOfJobs := len(songs)
 
+	if album {
+		loudgain.GetAlbums(songs)
+		return
+	}
+
 	jobs := make(chan string, numberOfJobs)
 	results := make(chan loudgain.ScanResult, numberOfJobs)
 
-	for i := 0; i < numberOfWorkers; i++ {
+	for i := 0; i < loudgain.WorkersLimit; i++ {
 		go worker(jobs, results)
 	}
 
