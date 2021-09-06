@@ -51,9 +51,7 @@ def get_songs_intersection(
 ) -> List[Tuple[str, str]]:
     song_names_one = [pathlib.PurePath(song).stem for song in list_one]
     song_names_two = [pathlib.PurePath(song).stem for song in list_two]
-    song_names_intersection = [
-        song for song in song_names_one if song in song_names_two
-    ]
+    song_names_intersection = set.intersection(set(song_names_one), set(song_names_two))
 
     songs_list_one = [
         song
