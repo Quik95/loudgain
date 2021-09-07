@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/Quik95/loudgain"
@@ -48,6 +50,15 @@ func checkExitCondition(tagMode loudgain.WriteMode) error {
 	return nil
 }
 
+func checkIfPathIsDirectory(path string) bool {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return fileInfo.IsDir()
+}
+
 func setGlobals() error {
 	ffmpegPath, err := exec.LookPath("ffmpeg")
 	if err != nil {
@@ -71,6 +82,42 @@ func setGlobals() error {
 	return nil
 }
 
+func getSongsFromDirectory(dir string) (songs []string) {
+	dirEntries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range dirEntries {
+		if entry.IsDir() {
+			songs = append(songs, getSongsFromDirectory(filepath.Join(dir, entry.Name()))...)
+		} else {
+			songs = append(songs, filepath.Join(dir, entry.Name()))
+		}
+	}
+
+	return
+}
+
+func expandSongs(paths []string) (songs []string) {
+	for _, path := range paths {
+		if checkIfPathIsDirectory(path) {
+			songsInDirectory := getSongsFromDirectory(path)
+			for _, song := range songsInDirectory {
+				if err := loudgain.CheckExtension(song); err == nil {
+					songs = append(songs, song)
+				}
+			}
+		} else {
+			if err := loudgain.CheckExtension(path); err == nil {
+				songs = append(songs, path)
+			}
+		}
+	}
+
+	return
+}
+
 func main() {
 
 	if err := checkExitCondition(loudgain.TagMode); err != nil {
@@ -81,7 +128,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	songs := flag.Args()
+	songs := expandSongs(flag.Args())
 	numberOfJobs := len(songs)
 
 	if album {

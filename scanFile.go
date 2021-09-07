@@ -7,7 +7,7 @@ import (
 	"path"
 )
 
-func checkExtension(filepath string) error {
+func CheckExtension(filepath string) error {
 	allowed := map[string]bool{
 		".aiff": true,
 		".aif":  true,
@@ -39,7 +39,7 @@ func checkExtension(filepath string) error {
 }
 
 func ScanFile(filepath string) ScanResult {
-	if err := checkExtension(filepath); err != nil {
+	if err := CheckExtension(filepath); err != nil {
 		log.Println(err)
 
 		return ScanResult{}
