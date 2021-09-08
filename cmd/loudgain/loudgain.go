@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/Quik95/loudgain"
 )
@@ -135,38 +136,34 @@ func main() {
 		return
 	}
 
-	jobs := make(chan string, numberOfJobs)
+	var wg sync.WaitGroup
+	wg.Add(numberOfJobs)
+
 	results := make(chan loudgain.ScanResult, numberOfJobs)
-
-	for i := 0; i < loudgain.WorkersLimit; i++ {
-		go worker(jobs, results)
-	}
-
-	for _, song := range songs {
-		jobs <- song
-	}
-	close(jobs)
-
-	output := make([]loudgain.ScanResult, 0, numberOfJobs)
-
+	guard := make(chan struct{}, loudgain.WorkersLimit)
 	progressBar := loudgain.GetProgressBar(numberOfJobs)
 	progressBar.Describe("Scanning songs")
 
-	for i := 0; i < numberOfJobs; i++ {
+	scanFile := func(song string) {
+		guard <- struct{}{}
+		results <- loudgain.ScanFile(song)
+
+		<-guard
+		wg.Done()
 		progressBar.Add(1)
-		output = append(output, <-results)
 	}
+
+	for _, song := range songs {
+		go scanFile(song)
+	}
+
+	wg.Wait()
+	close(results)
 
 	if !quiet {
 		fmt.Print("\n")
-		for _, x := range output {
-			fmt.Println(x)
+		for result := range results {
+			fmt.Println(result)
 		}
-	}
-}
-
-func worker(jobs <-chan string, results chan<- loudgain.ScanResult) {
-	for job := range jobs {
-		results <- loudgain.ScanFile(job)
 	}
 }
