@@ -11,7 +11,6 @@ import (
 	"runtime"
 
 	"github.com/Quik95/loudgain"
-	"github.com/schollz/progressbar/v3"
 )
 
 var (
@@ -149,7 +148,9 @@ func main() {
 	close(jobs)
 
 	output := make([]loudgain.ScanResult, 0, numberOfJobs)
-	progressBar := getProgressBar(numberOfJobs)
+
+	progressBar := loudgain.GetProgressBar(numberOfJobs)
+	progressBar.Describe("Scanning songs")
 
 	for i := 0; i < numberOfJobs; i++ {
 		progressBar.Add(1)
@@ -168,13 +169,4 @@ func worker(jobs <-chan string, results chan<- loudgain.ScanResult) {
 	for job := range jobs {
 		results <- loudgain.ScanFile(job)
 	}
-}
-
-func getProgressBar(numberOfJobs int) *progressbar.ProgressBar {
-
-	return progressbar.NewOptions(numberOfJobs,
-		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionSetRenderBlankState(true),
-		progressbar.OptionFullWidth(),
-	)
 }

@@ -7,45 +7,77 @@ import (
 	"log"
 	"os/exec"
 	"sync"
+	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
+type songWithAlbum struct {
+	Album, Song string
+}
+
+func GetProgressBar(numberOfJobs int) *progressbar.ProgressBar {
+	return progressbar.NewOptions(numberOfJobs,
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionFullWidth(),
+		progressbar.OptionClearOnFinish(),
+		progressbar.OptionUseANSICodes(true),
+	)
+}
+
+// TimeTrack measures the time between calling it and it's execution.
+func TimeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	log.Printf("%s took %s", name, elapsed)
+}
+
 // GetAlbums function reads albums from songs and return a list of unique album names.
-func GetAlbums(songs []string) []string {
+func GetAlbums(songs []string) map[string][]string {
 	var wg sync.WaitGroup
+
 	wg.Add(len(songs))
 
-	reschan := make(chan string, len(songs))
+	reschan := make(chan songWithAlbum, len(songs))
 	guard := make(chan struct{}, WorkersLimit)
+
+	progressBar := GetProgressBar(len(songs))
+	progressBar.Describe("Getting albums from songs")
+
+	runGetSongsInParallel := func(song string, reschan chan<- songWithAlbum, wg *sync.WaitGroup) {
+		album, err := getSongsAlbum(song)
+		if err != nil {
+			log.Println(err)
+		}
+		reschan <- songWithAlbum{Album: album, Song: song}
+
+		<-guard
+		wg.Done()
+		progressBar.Add(1)
+	}
 
 	for _, song := range songs {
 		guard <- struct{}{}
-		go func(song string, reschan chan<- string, wg *sync.WaitGroup) {
-			album, err := getSongsAlbum(song)
-			if err != nil {
-				log.Println(err)
-			}
-			reschan <- album
 
-			<-guard
-			wg.Done()
-		}(song, reschan, &wg)
+		go runGetSongsInParallel(song, reschan, &wg)
 	}
+
 	wg.Wait()
 	close(reschan)
 
-	uniqueAlbums := map[string]bool{}
-	albums := make([]string, 0, len(uniqueAlbums))
+	albumsWithSongs := map[string][]string{}
 
-	for album := range reschan {
-		if _, ok := uniqueAlbums[album]; !ok {
-			uniqueAlbums[album] = true
-			albums = append(albums, album)
+	for pair := range reschan {
+		if _, ok := albumsWithSongs[pair.Album]; !ok {
+			albumsWithSongs[pair.Album] = []string{pair.Song}
+		} else {
+			albumsWithSongs[pair.Album] = append(albumsWithSongs[pair.Album], pair.Song)
 		}
 	}
 
-	log.Printf("%#v", albums)
-	log.Printf("n songs: %d, n albums: %d", len(songs), len(albums))
-	return albums
+	log.Printf("n songs: %d, n albums: %d", len(songs), len(albumsWithSongs))
+
+	return albumsWithSongs
 }
 
 func getSongsAlbum(song string) (string, error) {
@@ -63,6 +95,7 @@ func getSongsAlbum(song string) (string, error) {
 		if errors.As(err, &execError) {
 			return "", fmt.Errorf("failed to probe %s: %s", song, execError.Stderr)
 		}
+
 		return "", fmt.Errorf("failed to probe %s", song)
 	}
 
