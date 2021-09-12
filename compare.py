@@ -15,6 +15,25 @@ parser.add_argument("first_dir", help="First folder containing audio files.")
 parser.add_argument("second_dir", help="Second folder containing audio files.")
 
 
+class Decibel(float):
+    def __new__(cls, value=0) -> float:
+        return float.__new__(cls, value)
+
+
+class LoudnessUnit(float):
+    def __new__(cls, value=0) -> float:
+        return float.__new__(cls, value)
+
+
+@dataclass
+class ReplaygainValues:
+    filename: str
+    track_gain: Decibel
+    track_peak: float
+    track_range: Decibel
+    reference_loudness: LoudnessUnit
+
+
 def run():
     args = vars(parser.parse_args())
 
@@ -26,24 +45,41 @@ def run():
     with multiprocessing.Pool() as pool:
         results = pool.map(runner, songs_intersection)
 
-        max_gain_diff, max_gain_diff_file = -math.inf, ""
-        max_peak_diff, max_peak_diff_file = -math.inf, ""
-        max_range_diff, max_range_diff_file = -math.inf, ""
+        track_diff = get_diff([(x[0][0], x[1][0]) for x in results])
+        album_diff = get_diff([(x[0][1], x[1][1]) for x in results])
 
-        for values_one, values_two in results:
-            gain_diff, peak_diff, range_diff = get_value_difference(
-                values_one, values_two
-            )
-            if gain_diff > max_gain_diff:
-                max_gain_diff, max_gain_diff_file = gain_diff, values_one.filename
-            if peak_diff > max_peak_diff:
-                max_peak_diff, max_peak_diff_file = peak_diff, values_one.filename
-            if range_diff > max_range_diff:
-                max_range_diff, max_range_diff_file = range_diff, values_one.filename
+        print("Track:")
+        print(f"Gain difference: {track_diff[0][0]}: {track_diff[0][1]:.2f} dB")
+        print(f"Peak difference: {track_diff[1][0]}: {track_diff[1][1]:.2f}")
+        print(f"Range difference: {track_diff[2][0]}: {track_diff[2][1]:.2f} dB")
 
-        print(f"Gain difference: {max_gain_diff_file}: {max_gain_diff:.2f} dB")
-        print(f"Peak difference: {max_peak_diff_file}: {max_peak_diff:.2f}")
-        print(f"Range difference: {max_range_diff_file}: {max_range_diff:.2f} dB")
+        print("\nAlbum:")
+        print(f"Gain difference: {album_diff[0][0]}: {album_diff[0][1]:.2f} dB")
+        print(f"Peak difference: {album_diff[1][0]}: {album_diff[1][1]:.2f}")
+        print(f"Range difference: {album_diff[2][0]}: {album_diff[2][1]:.2f} dB")
+
+
+def get_diff(
+    results: List[Tuple[ReplaygainValues, ReplaygainValues]]
+) -> Tuple[Tuple[str, float], Tuple[str, float], Tuple[str, float]]:
+    max_gain_diff, max_gain_diff_file = -math.inf, ""
+    max_peak_diff, max_peak_diff_file = -math.inf, ""
+    max_range_diff, max_range_diff_file = -math.inf, ""
+
+    for values_one, values_two in results:
+        gain_diff, peak_diff, range_diff = get_value_difference(values_one, values_two)
+        if gain_diff > max_gain_diff:
+            max_gain_diff, max_gain_diff_file = gain_diff, values_one.filename
+        if peak_diff > max_peak_diff:
+            max_peak_diff, max_peak_diff_file = peak_diff, values_one.filename
+        if range_diff > max_range_diff:
+            max_range_diff, max_range_diff_file = range_diff, values_one.filename
+
+    return (
+        (max_gain_diff_file, max_gain_diff),
+        (max_peak_diff_file, max_peak_diff),
+        (max_range_diff_file, max_range_diff),
+    )
 
 
 def get_songs_intersection(
@@ -99,25 +135,6 @@ def get_songs_from_folder(filepath: str) -> List[str]:
     return songs
 
 
-class Decibel(float):
-    def __new__(cls, value=0) -> float:
-        return float.__new__(cls, value)
-
-
-class LoudnessUnit(float):
-    def __new__(cls, value=0) -> float:
-        return float.__new__(cls, value)
-
-
-@dataclass
-class ReplaygainValues:
-    filename: str
-    track_gain: Decibel
-    track_peak: float
-    track_range: Decibel
-    reference_loudness: LoudnessUnit
-
-
 def print_json(pairs: List[Tuple[str, str]]):
     res = {}
 
@@ -136,7 +153,7 @@ def print_json(pairs: List[Tuple[str, str]]):
     return res
 
 
-def ProbeReplaygainValues(filename: str) -> ReplaygainValues:
+def ProbeReplaygainValues(filename: str) -> Tuple[ReplaygainValues, ReplaygainValues]:
     probe = subprocess.run(
         args=[
             "ffprobe",
@@ -154,12 +171,21 @@ def ProbeReplaygainValues(filename: str) -> ReplaygainValues:
     top_level = data.get("format", {})
     tags = top_level.get("tags", {})
 
-    return ReplaygainValues(
-        top_level.get("filename"),
-        tags.get("replaygain_track_gain"),
-        tags.get("replaygain_track_peak"),
-        tags.get("replaygain_track_range"),
-        tags.get("replaygain_reference_loudness"),
+    return (
+        ReplaygainValues(
+            top_level.get("filename"),
+            tags.get("replaygain_track_gain"),
+            tags.get("replaygain_track_peak"),
+            tags.get("replaygain_track_range"),
+            tags.get("replaygain_reference_loudness"),
+        ),
+        ReplaygainValues(
+            top_level.get("filename"),
+            tags.get("replaygain_album_gain"),
+            tags.get("replaygain_album_peak"),
+            tags.get("replaygain_album_range"),
+            tags.get("replaygain_reference_loudness"),
+        ),
     )
 
 
@@ -173,8 +199,11 @@ def get_value_difference(
     )
 
 
-def runner(songs: Tuple[str, str]) -> Tuple[ReplaygainValues, ReplaygainValues]:
-    return (ProbeReplaygainValues(songs[0]), ProbeReplaygainValues(songs[1]))
+def runner(songs: Tuple[str, str]) -> Tuple[Tuple[ReplaygainValues, ReplaygainValues], Tuple[ReplaygainValues, ReplaygainValues]]:
+    return (
+        ProbeReplaygainValues(songs[0]),
+        ProbeReplaygainValues(songs[1]),
+    )
 
 
 def main():
