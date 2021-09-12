@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	flagPeakLimit, flagPregain float64
-	noClip, quiet, album       bool
-	tagMode                    string
-	numberOfWorkers            int
+	flagPeakLimit, flagPregain  float64
+	noClip, quiet, album, track bool
+	tagMode                     string
+	numberOfWorkers             int
 )
 
 func init() {
@@ -27,7 +27,8 @@ func init() {
 	flag.IntVar(&numberOfWorkers, "workers", runtime.NumCPU(), "Number of workers scanning songs in parallel.")
 	flag.BoolVar(&quiet, "quiet", false, "Supress output.")
 	flag.BoolVar(&noClip, "noclip", false, "Lower track gain to avoid clipping.")
-	flag.BoolVar(&album, "album", true, "Also calculate replaygain values for album.")
+	flag.BoolVar(&album, "album", false, "Also calculate replaygain values for album.")
+	flag.BoolVar(&track, "track", true, "Calculate replaygain values for tracks.")
 	flag.StringVar(&tagMode, "tagmode", "s",
 		"--tagmode=d Delete ReplayGain tags from files. (uninmplemented)\n"+
 			"--tagmode=i Write Replaygain 2.0 tags to files.\n"+
@@ -129,62 +130,41 @@ func main() {
 
 	songs := expandSongs(flag.Args())
 
-	var wg sync.WaitGroup
-
-	guard := make(chan struct{}, loudgain.WorkersLimit)
-
 	if album {
 		scannedSongs := loudgain.GetScannedAlbums(songs)
 
-		wg.Add(len(scannedSongs))
-
-		for song := range scannedSongs {
-			go writeToSong(song, true, guard, &wg)
-		}
-
-		wg.Wait()
-
-		return
+		writeToSongs(scannedSongs, true)
 	}
 
-	wg.Add(len(songs))
+	if track {
+		scannedSongs := loudgain.GetScannedSongs(songs)
 
-	progressBar := loudgain.GetProgressBar(len(songs))
-	progressBar.Describe("Scanning songs")
-
-	results := make(chan loudgain.ScanResult, len(songs))
-
-	scanSong := func(song string) {
-		guard <- struct{}{}
-		results <- loudgain.ScanFile(song)
-
-		wg.Done()
-		progressBar.Add(1)
-		<-guard
+		writeToSongs(scannedSongs, false)
 	}
-
-	for _, song := range songs {
-		go scanSong(song)
-	}
-	wg.Wait()
-	close(results)
-
-	wg.Add(len(results))
-	for res := range results {
-		go writeToSong(res, false, guard, &wg)
-	}
-	wg.Wait()
 }
 
-func writeToSong(sr loudgain.ScanResult, album bool, guard chan struct{}, wg *sync.WaitGroup) {
-	guard <- struct{}{}
-	if err := loudgain.WriteMetadata(sr, album); err != nil {
-		log.Println(err)
-	}
-	if !quiet {
-		fmt.Println(sr)
+func writeToSongs(scanchan <-chan loudgain.ScanResult, album bool) {
+	var wg sync.WaitGroup
+	wg.Add(len(scanchan))
+
+	guard := make(chan struct{}, loudgain.WorkersLimit)
+
+	write := func(scan loudgain.ScanResult) {
+		if err := loudgain.WriteMetadata(scan, album); err != nil {
+			log.Println(err)
+		}
+		if !quiet {
+			fmt.Println(scan)
+		}
+
+		<-guard
+		wg.Done()
 	}
 
-	wg.Done()
-	<-guard
+	for scan := range scanchan {
+		guard <- struct{}{}
+		go write(scan)
+	}
+
+	wg.Wait()
 }

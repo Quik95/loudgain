@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sync"
 )
 
 func CheckExtension(filepath string) error {
@@ -78,4 +79,32 @@ func ScanFile(filepath string) ScanResult {
 	}
 
 	return res
+}
+
+func GetScannedSongs(songs []string) <-chan ScanResult {
+	var wg sync.WaitGroup
+	wg.Add(len(songs))
+
+	guard := make(chan struct{}, WorkersLimit)
+	reschan := make(chan ScanResult, len(songs))
+	pg := GetProgressBar(len(songs))
+	pg.Describe("Scanning tracks")
+
+	doScan := func(song string) {
+		reschan <- ScanFile(song)
+
+		wg.Done()
+		pg.Add(1)
+		<-guard
+	}
+
+	for _, song := range songs {
+		guard <- struct{}{}
+		go doScan(song)
+	}
+
+	wg.Wait()
+	close(reschan)
+
+	return reschan
 }

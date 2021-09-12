@@ -165,7 +165,6 @@ func getFFmpegArgs(metadata ScanResult, swapFile string, album bool) []string {
 
 func ffmpegWriteMetadata(metadata ScanResult, swapFile string, album bool) error {
 	args := getFFmpegArgs(metadata, swapFile, album)
-	fmt.Printf("args: %v\n", args)
 
 	cmd := exec.Command(FFmpegPath, args...)
 
