@@ -32,7 +32,7 @@ func CheckExtension(filepath string) error {
 	extension := path.Ext(filepath)
 
 	if _, ok := allowed[extension]; ok != true {
-		return fmt.Errorf("unsupported file format: %s", extension)
+		return fmt.Errorf("unsupported file format in song: %s", filepath)
 	}
 
 	return nil
@@ -63,9 +63,9 @@ func ScanFile(filepath string) ScanResult {
 		return ScanResult{}
 	}
 
-	trackGain := CalculateTrackGain(ll.IntegratedLoudness, ReferenceLoudness, Pregain)
+	trackGain := CalculateTrackGain(ll.IntegratedLoudness)
 	if NoClip {
-		trackGain = PreventClipping(ll.TruePeakdB, trackGain, TrackPeakLimit)
+		trackGain = PreventClipping(ll.TruePeakdB, trackGain)
 	}
 
 	res := ScanResult{
@@ -75,14 +75,6 @@ func ScanFile(filepath string) ScanResult {
 		ReferenceLoudness: ReferenceLoudness,
 		TrackPeak:         ll.TruePeakdB.ToLinear(),
 		Loudness:          ll.IntegratedLoudness,
-	}
-
-	if TagMode != SkipWritingTags {
-		if err := WriteMetadata(FFmpegPath, res, TagMode); err != nil {
-			log.Println(err)
-
-			return ScanResult{}
-		}
 	}
 
 	return res

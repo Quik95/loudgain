@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,42 +38,10 @@ func TimeTrack(start time.Time, name string) {
 	log.Printf("%s took %s", name, elapsed)
 }
 
-// GetAlbums function reads albums from songs and return a list of unique album names.
-func GetAlbums(songs []string) map[string][]string {
-	var wg sync.WaitGroup
-
-	wg.Add(len(songs))
-
-	reschan := make(chan songWithAlbum, len(songs))
-	guard := make(chan struct{}, WorkersLimit)
-
-	progressBar := GetProgressBar(len(songs))
-	progressBar.Describe("Getting albums from songs")
-
-	runGetSongsInParallel := func(song string, reschan chan<- songWithAlbum, wg *sync.WaitGroup) {
-		album, err := getSongsAlbum(song)
-		if err != nil {
-			log.Println(err)
-		}
-		reschan <- songWithAlbum{Album: album, Song: song}
-
-		<-guard
-		wg.Done()
-		progressBar.Add(1)
-	}
-
-	for _, song := range songs {
-		guard <- struct{}{}
-
-		go runGetSongsInParallel(song, reschan, &wg)
-	}
-
-	wg.Wait()
-	close(reschan)
-
+func getListOfAlbumSongs(pairs []songWithAlbum) map[string][]string {
 	albumsWithSongs := map[string][]string{}
 
-	for pair := range reschan {
+	for _, pair := range pairs {
 		if _, ok := albumsWithSongs[pair.Album]; !ok {
 			albumsWithSongs[pair.Album] = []string{pair.Song}
 		} else {
@@ -80,18 +49,89 @@ func GetAlbums(songs []string) map[string][]string {
 		}
 	}
 
+	return albumsWithSongs
+}
+
+// GetScannedAlbums function reads albums from songs and return a list of unique album names.
+func GetScannedAlbums(songs []string) <-chan ScanResult {
+	albumAndSongPairs := make([]songWithAlbum, 0, len(songs))
+	for _, song := range songs {
+		album, err := getAlbumFromSong(song)
+		if err != nil {
+			log.Println(err)
+		}
+		albumAndSongPairs = append(albumAndSongPairs, songWithAlbum{Album: album, Song: song})
+	}
+
+	albumsWithSongs := getListOfAlbumSongs(albumAndSongPairs)
+
 	log.Printf("n songs: %d, n albums: %d", len(songs), len(albumsWithSongs))
 
-	filename, err := combineIntoOneFile(albumsWithSongs["Hot Fuss"])
+	pg := GetProgressBar(len(albumsWithSongs))
+	pg.Describe("Scanning albums")
+
+	numberOfJobs := 0
+	for _, songs := range albumsWithSongs {
+		numberOfJobs += len(songs)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(numberOfJobs)
+
+	reschan := make(chan ScanResult, numberOfJobs)
+	guard := make(chan struct{}, WorkersLimit)
+
+	scan := func(songs []string) {
+		res := scanAlbum(songs)
+		for _, x := range res {
+			reschan <- x
+		}
+
+		wg.Done()
+		pg.Add(1)
+		<-guard
+	}
+
+	for _, songs := range albumsWithSongs {
+		guard <- struct{}{}
+		go scan(songs)
+	}
+
+	wg.Wait()
+	close(reschan)
+
+	return reschan
+}
+
+func scanAlbum(songs []string) []ScanResult {
+	// there is nothing to join if album has only one song
+	if len(songs) == 1 {
+		return []ScanResult{ScanFile(songs[0])}
+	}
+
+	results := make([]ScanResult, 0, len(songs))
+
+	filename, err := combineIntoOneFile(songs)
 	if err != nil {
-		log.Fatalln(err)
+		log.Printf("failed to scan songs: %#v", songs)
+		log.Println(err)
+		return nil
 	}
 	defer os.Remove(filename)
 
-	sr := ScanFile(filename)
-	fmt.Println(sr)
+	tempScanResult := ScanFile(filename)
 
-	return albumsWithSongs
+	for _, song := range songs {
+		results = append(results, ScanResult{
+			FilePath:          song,
+			TrackGain:         tempScanResult.TrackGain,
+			TrackRange:        tempScanResult.TrackRange,
+			TrackPeak:         tempScanResult.TrackPeak,
+			ReferenceLoudness: ReferenceLoudness,
+		})
+	}
+
+	return results
 }
 
 func getHashOfStrings(in []string) string {
@@ -140,6 +180,8 @@ func combineIntoOneFile(songs []string) (string, error) {
 
 	cmd := exec.Command(
 		FFmpegPath,
+		"-hide_banner",
+		"-y",
 		"-f",
 		"concat",
 		"-safe",
@@ -151,17 +193,23 @@ func combineIntoOneFile(songs []string) (string, error) {
 		concatSongFilepath,
 	)
 
-	ffmpegErrorOutput, err := cmd.Output()
+	_, err = cmd.Output()
 	if err != nil {
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {
-			return "", fmt.Errorf("failed to concatenate songs: %s", ffmpegErrorOutput)
+			return "", fmt.Errorf("failed to concatenate songs: %s", exitError.Stderr)
 		}
 
 		return "", fmt.Errorf("failed to concatenate songs: %w", err)
 	}
 
 	return concatSongFilepath, nil
+}
+
+func escapeQuotes(filename string) string {
+	escaped := strings.ReplaceAll(filename, `'`, `'\''`)
+
+	return escaped
 }
 
 func writeFFmpegConcatInput(songs []string) (*os.File, error) {
@@ -171,14 +219,14 @@ func writeFFmpegConcatInput(songs []string) (*os.File, error) {
 	}
 
 	for _, song := range songs {
-		str := fmt.Sprintf("file '%s'\n", song)
+		str := fmt.Sprintf("file '%s'\n", escapeQuotes(song))
 		file.WriteString(str)
 	}
 
 	return file, err
 }
 
-func getSongsAlbum(song string) (string, error) {
+func getAlbumFromSong(song string) (string, error) {
 	cmd := exec.Command(
 		FFprobePath,
 		"-show_format",

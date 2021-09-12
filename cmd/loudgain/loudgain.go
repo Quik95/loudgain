@@ -119,7 +119,6 @@ func expandSongs(paths []string) (songs []string) {
 }
 
 func main() {
-
 	if err := checkExitCondition(loudgain.TagMode); err != nil {
 		log.Fatal(err)
 	}
@@ -129,41 +128,63 @@ func main() {
 	}
 
 	songs := expandSongs(flag.Args())
-	numberOfJobs := len(songs)
+
+	var wg sync.WaitGroup
+
+	guard := make(chan struct{}, loudgain.WorkersLimit)
 
 	if album {
-		loudgain.GetAlbums(songs)
+		scannedSongs := loudgain.GetScannedAlbums(songs)
+
+		wg.Add(len(scannedSongs))
+
+		for song := range scannedSongs {
+			go writeToSong(song, true, guard, &wg)
+		}
+
+		wg.Wait()
+
 		return
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(numberOfJobs)
+	wg.Add(len(songs))
 
-	results := make(chan loudgain.ScanResult, numberOfJobs)
-	guard := make(chan struct{}, loudgain.WorkersLimit)
-	progressBar := loudgain.GetProgressBar(numberOfJobs)
+	progressBar := loudgain.GetProgressBar(len(songs))
 	progressBar.Describe("Scanning songs")
 
-	scanFile := func(song string) {
+	results := make(chan loudgain.ScanResult, len(songs))
+
+	scanSong := func(song string) {
 		guard <- struct{}{}
 		results <- loudgain.ScanFile(song)
 
-		<-guard
 		wg.Done()
 		progressBar.Add(1)
+		<-guard
 	}
 
 	for _, song := range songs {
-		go scanFile(song)
+		go scanSong(song)
 	}
-
 	wg.Wait()
 	close(results)
 
-	if !quiet {
-		fmt.Print("\n")
-		for result := range results {
-			fmt.Println(result)
-		}
+	wg.Add(len(results))
+	for res := range results {
+		go writeToSong(res, false, guard, &wg)
 	}
+	wg.Wait()
+}
+
+func writeToSong(sr loudgain.ScanResult, album bool, guard chan struct{}, wg *sync.WaitGroup) {
+	guard <- struct{}{}
+	if err := loudgain.WriteMetadata(sr, album); err != nil {
+		log.Println(err)
+	}
+	if !quiet {
+		fmt.Println(sr)
+	}
+
+	wg.Done()
+	<-guard
 }

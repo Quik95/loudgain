@@ -6,8 +6,8 @@ import (
 )
 
 // CalculateTrackGain applies gain based on measured loudness of the audio file relative to the reference level.
-func CalculateTrackGain(loudness, referenceLevel, pregain LoudnessUnit) LoudnessUnit {
-	return referenceLevel - loudness + pregain
+func CalculateTrackGain(loudness LoudnessUnit) LoudnessUnit {
+	return ReferenceLoudness - loudness + Pregain
 }
 
 // ToLinear converts loudness in the dBTP unit to the linear 0..1 scale.
@@ -41,11 +41,11 @@ func (l LoudnessUnit) ToLinear() LinearLoudness {
 }
 
 // PreventClipping checks if after applying gain the clipping will occur, and lowers a track's peak if necessary.
-func PreventClipping(trackPeak Decibel, trackGain LoudnessUnit, trackPeakLimit Decibel) LoudnessUnit {
+func PreventClipping(trackPeak Decibel, trackGain LoudnessUnit) LoudnessUnit {
 	trackPeakAfterGain := trackGain.ToLinear() * trackPeak.ToLinear()
 
-	if trackPeakAfterGain > trackPeakLimit.ToLinear() {
-		return trackGain - (trackPeakAfterGain / trackPeakLimit.ToLinear()).ToLoudnessUnit()
+	if trackPeakAfterGain > TrackPeakLimit.ToLinear() {
+		return trackGain - (trackPeakAfterGain / TrackPeakLimit.ToLinear()).ToLoudnessUnit()
 	}
 
 	return trackGain

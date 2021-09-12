@@ -12,10 +12,10 @@ import (
 // Next it prepands backup- to the original file and renames the copy to the original.
 // When all this finishes successfully, this function removes the original file.
 // In case of an error the original file is renamed back to it's initial name, and the copy is deleted.
-func WriteMetadata(ffmpegPath string, scan ScanResult, tagMode WriteMode) error {
+func WriteMetadata(scan ScanResult, album bool) error {
 	tempFile := prependToBase(scan.FilePath, "loudgain-")
 
-	if err := ffmpegWriteMetadata(scan, FFmpegPath, tempFile, tagMode); err != nil {
+	if err := ffmpegWriteMetadata(scan, tempFile, album); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -58,7 +58,83 @@ func swapFiles(original, swap string) error {
 	return nil
 }
 
-func getFFmpegArgs(metadata ScanResult, swapFile string, mode WriteMode) []string {
+func getTagsAlbum(metadata ScanResult) []string {
+	switch TagMode {
+	case WriteRG2:
+		return []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_album_gain=%.2f dB", metadata.TrackGain),
+			"-metadata",
+			fmt.Sprintf("replaygain_album_peak=%.6f", metadata.TrackPeak),
+		}
+	case ExtraTags:
+		return []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_album_gain=%.2f dB", metadata.TrackGain),
+			"-metadata",
+			fmt.Sprintf("replaygain_album_peak=%.6f", metadata.TrackPeak),
+			"-metadata",
+			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
+			"-metadata",
+			fmt.Sprintf("replaygain_album_range=%.2f dB", metadata.TrackRange),
+		}
+	case ExtraTagsLU:
+		return []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_album_gain=%.2f LUFS", metadata.TrackGain.ToLoudnessUnit()),
+			"-metadata",
+			fmt.Sprintf("replaygain_album_peak=%.6f", metadata.TrackPeak),
+			"-metadata",
+			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
+			"-metadata",
+			fmt.Sprintf("replaygain_album_range=%.2f LU", metadata.TrackRange.ToLoudnessUnit()),
+		}
+	case DeleteTags, InvalidWriteMode, SkipWritingTags:
+		return []string{}
+	}
+
+	return []string{}
+}
+
+func getTagsTrack(metadata ScanResult) []string {
+	switch TagMode {
+	case WriteRG2:
+		return []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_track_gain=%.2f dB", metadata.TrackGain),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
+		}
+	case ExtraTags:
+		return []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_track_gain=%.2f dB", metadata.TrackGain),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
+			"-metadata",
+			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_range=%.2f dB", metadata.TrackRange),
+		}
+	case ExtraTagsLU:
+		return []string{
+			"-metadata",
+			fmt.Sprintf("replaygain_track_gain=%.2f LUFS", metadata.TrackGain.ToLoudnessUnit()),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
+			"-metadata",
+			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
+			"-metadata",
+			fmt.Sprintf("replaygain_track_range=%.2f LU", metadata.TrackRange.ToLoudnessUnit()),
+		}
+	case DeleteTags, InvalidWriteMode, SkipWritingTags:
+		return []string{}
+	}
+
+	return []string{}
+}
+
+func getFFmpegArgs(metadata ScanResult, swapFile string, album bool) []string {
 	base := []string{
 		"-hide_banner",
 		"-i",
@@ -72,38 +148,14 @@ func getFFmpegArgs(metadata ScanResult, swapFile string, mode WriteMode) []strin
 		"1",
 	}
 
-	switch mode {
-	case WriteRG2:
-		base = append(base, []string{
-			"-metadata",
-			fmt.Sprintf("replaygain_track_gain=%.2f dB", metadata.TrackGain),
-			"-metadata",
-			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
-		}...)
-	case ExtraTags:
-		base = append(base, []string{
-			"-metadata",
-			fmt.Sprintf("replaygain_track_gain=%.2f dB", metadata.TrackGain),
-			"-metadata",
-			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
-			"-metadata",
-			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
-			"-metadata",
-			fmt.Sprintf("replaygain_track_range=%.2f dB", metadata.TrackRange),
-		}...)
-	case ExtraTagsLU:
-		base = append(base, []string{
-			"-metadata",
-			fmt.Sprintf("replaygain_track_gain=%.2f LUFS", metadata.TrackGain.ToLoudnessUnit()),
-			"-metadata",
-			fmt.Sprintf("replaygain_track_peak=%.6f", metadata.TrackPeak),
-			"-metadata",
-			fmt.Sprintf("replaygain_reference_loudness=%.2f LUFS", metadata.ReferenceLoudness),
-			"-metadata",
-			fmt.Sprintf("replaygain_track_range=%.2f LU", metadata.TrackRange.ToLoudnessUnit()),
-		}...)
-	case DeleteTags, InvalidWriteMode, SkipWritingTags:
+	var formattedTags []string
+	if album {
+		formattedTags = getTagsAlbum(metadata)
+	} else {
+		formattedTags = getTagsTrack(metadata)
 	}
+
+	base = append(base, formattedTags...)
 
 	// don't forget to include output path as the last item
 	base = append(base, swapFile)
@@ -111,8 +163,9 @@ func getFFmpegArgs(metadata ScanResult, swapFile string, mode WriteMode) []strin
 	return base
 }
 
-func ffmpegWriteMetadata(metadata ScanResult, ffmpegPath, swapFile string, mode WriteMode) error {
-	args := getFFmpegArgs(metadata, swapFile, mode)
+func ffmpegWriteMetadata(metadata ScanResult, swapFile string, album bool) error {
+	args := getFFmpegArgs(metadata, swapFile, album)
+	fmt.Printf("args: %v\n", args)
 
 	cmd := exec.Command(FFmpegPath, args...)
 
