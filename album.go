@@ -65,20 +65,20 @@ func GetScannedAlbums(songs []string) <-chan ScanResult {
 
 	albumsWithSongs := getListOfAlbumSongs(albumAndSongPairs)
 
-	log.Printf("n songs: %d, n albums: %d", len(songs), len(albumsWithSongs))
+	log.Printf("Found %d albums in %d songs.", len(albumsWithSongs), len(songs))
 
 	pg := GetProgressBar(len(albumsWithSongs))
 	pg.Describe("Scanning albums")
 
-	numberOfJobs := 0
+	var wg sync.WaitGroup
+	wg.Add(len(albumsWithSongs))
+
+	numberOfSongs := 0
 	for _, songs := range albumsWithSongs {
-		numberOfJobs += len(songs)
+		numberOfSongs += len(songs)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(numberOfJobs)
-
-	reschan := make(chan ScanResult, numberOfJobs)
+	reschan := make(chan ScanResult, numberOfSongs)
 	guard := make(chan struct{}, WorkersLimit)
 
 	scan := func(songs []string) {
