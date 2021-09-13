@@ -127,6 +127,7 @@ func scanAlbum(songs []string) []ScanResult {
 			TrackGain:         tempScanResult.TrackGain,
 			TrackRange:        tempScanResult.TrackRange,
 			TrackPeak:         tempScanResult.TrackPeak,
+			Loudness:          tempScanResult.Loudness,
 			ReferenceLoudness: ReferenceLoudness,
 		})
 	}
