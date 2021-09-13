@@ -55,11 +55,13 @@ func getListOfAlbumSongs(pairs []songWithAlbum) map[string][]string {
 // GetScannedAlbums function reads albums from songs and return a list of unique album names.
 func GetScannedAlbums(songs []string) <-chan ScanResult {
 	albumAndSongPairs := make([]songWithAlbum, 0, len(songs))
+
 	for _, song := range songs {
 		album, err := getAlbumFromSong(song)
 		if err != nil {
 			log.Println(err)
 		}
+
 		albumAndSongPairs = append(albumAndSongPairs, songWithAlbum{Album: album, Song: song})
 	}
 
@@ -71,6 +73,7 @@ func GetScannedAlbums(songs []string) <-chan ScanResult {
 	pg.Describe("Scanning albums")
 
 	var wg sync.WaitGroup
+
 	wg.Add(len(albumsWithSongs))
 
 	numberOfSongs := 0
@@ -94,6 +97,7 @@ func GetScannedAlbums(songs []string) <-chan ScanResult {
 
 	for _, songs := range albumsWithSongs {
 		guard <- struct{}{}
+
 		go scan(songs)
 	}
 
@@ -115,6 +119,7 @@ func scanAlbum(songs []string) []ScanResult {
 	if err != nil {
 		log.Printf("failed to scan songs: %#v", songs)
 		log.Println(err)
+
 		return nil
 	}
 	defer os.Remove(filename)
@@ -152,10 +157,12 @@ func checkSameExtension(songs []string) bool {
 
 	res := true
 	last := filepath.Ext(songs[0])
+
 	for _, song := range songs {
 		ext := filepath.Ext(song)
 		if ext != last {
 			res = false
+
 			break
 		}
 	}
@@ -224,7 +231,7 @@ func writeFFmpegConcatInput(songs []string) (*os.File, error) {
 		file.WriteString(str)
 	}
 
-	return file, err
+	return file, nil
 }
 
 func getAlbumFromSong(song string) (string, error) {

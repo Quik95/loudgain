@@ -25,7 +25,7 @@ func init() {
 	flag.Float64Var(&flagPeakLimit, "maxtpl", -1.0, "Maximal true peak level in dBTP")
 	flag.Float64Var(&flagPregain, "pregain", 0.0, "Apply n dB/LU pre-gain value")
 	flag.IntVar(&numberOfWorkers, "workers", runtime.NumCPU(), "Number of workers scanning songs in parallel.")
-	flag.BoolVar(&quiet, "quiet", false, "Supress output.")
+	flag.BoolVar(&quiet, "quiet", false, "Suppress output.")
 	flag.BoolVar(&noClip, "noclip", false, "Lower track gain to avoid clipping.")
 	flag.BoolVar(&album, "album", false, "Also calculate replaygain values for album.")
 	flag.BoolVar(&track, "track", true, "Calculate replaygain values for tracks.")
@@ -109,10 +109,8 @@ func expandSongs(paths []string) (songs []string) {
 					songs = append(songs, song)
 				}
 			}
-		} else {
-			if err := loudgain.CheckExtension(path); err == nil {
-				songs = append(songs, path)
-			}
+		} else if err := loudgain.CheckExtension(path); err == nil {
+			songs = append(songs, path)
 		}
 	}
 
@@ -145,6 +143,7 @@ func main() {
 
 func writeToSongs(scanchan <-chan loudgain.ScanResult, album bool) {
 	var wg sync.WaitGroup
+
 	wg.Add(len(scanchan))
 
 	guard := make(chan struct{}, loudgain.WorkersLimit)
@@ -153,6 +152,7 @@ func writeToSongs(scanchan <-chan loudgain.ScanResult, album bool) {
 		if err := loudgain.WriteMetadata(scan, album); err != nil {
 			log.Println(err)
 		}
+
 		if !quiet {
 			fmt.Println(scan)
 		}
@@ -163,6 +163,7 @@ func writeToSongs(scanchan <-chan loudgain.ScanResult, album bool) {
 
 	for scan := range scanchan {
 		guard <- struct{}{}
+
 		go write(scan)
 	}
 

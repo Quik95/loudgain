@@ -32,7 +32,7 @@ func CheckExtension(filepath string) error {
 
 	extension := path.Ext(filepath)
 
-	if _, ok := allowed[extension]; ok != true {
+	if _, ok := allowed[extension]; !ok {
 		return fmt.Errorf("unsupported file format in song: %s", filepath)
 	}
 
@@ -83,6 +83,7 @@ func ScanFile(filepath string) ScanResult {
 
 func GetScannedSongs(songs []string) <-chan ScanResult {
 	var wg sync.WaitGroup
+
 	wg.Add(len(songs))
 
 	guard := make(chan struct{}, WorkersLimit)
@@ -100,6 +101,7 @@ func GetScannedSongs(songs []string) <-chan ScanResult {
 
 	for _, song := range songs {
 		guard <- struct{}{}
+
 		go doScan(song)
 	}
 
