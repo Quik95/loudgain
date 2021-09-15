@@ -6,7 +6,8 @@ namespace loudgain
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var songs = new SongsList(args);
+            Console.Write(songs);
         }
     }
 }
