@@ -8,14 +8,14 @@ namespace loudgain
 
         public SongsList(string[] songs)
         {
-            var badSong = CheckExtensions(songs);
+            var expanded = expandDirectories(songs);
+
+            var badSong = CheckExtensions(expanded);
             if (badSong is not null)
             {
                 Console.WriteLine(badSong);
                 Environment.Exit(1);
             }
-
-            var expanded = expandDirectories(songs);
 
             this.Songs = expanded;
         }
