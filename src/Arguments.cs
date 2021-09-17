@@ -69,9 +69,10 @@ namespace loudgain
 
             foreach (var song in songs)
             {
-                if (!System.IO.Directory.Exists(song))
+                if (System.IO.File.Exists(song))
                 {
                     sc.Add(song);
+                    continue;
                 }
 
                 var dirContents = System.IO.Directory.GetFiles(song);
