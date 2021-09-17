@@ -1,3 +1,9 @@
+using System;
+using System.Diagnostics;
+using System.Text;
+using System.Threading.Tasks;
+using Xabe.FFmpeg;
+
 namespace loudgain
 {
     public record ReplaygainValues
@@ -63,6 +69,44 @@ namespace loudgain
         public override string ToString()
         {
             return $"File: {this.FilePath}\n{this.Track}\n{this.Album}";
+        }
+
+        public static async Task<TrackValues?> TrackScan(string song)
+        {
+            var args =
+                $"-i \"{song}\" -hide_banner -nostats -filter_complex ebur128=peak='true':framelog='verbose' -f null -";
+
+            var conversion = FFmpeg.Conversions.New();
+
+            var parser = new FFmpegOutputParser();
+            
+            conversion.OnDataReceived += parser.ConversionOnOnDataReceived;
+            
+            var conversionResult = await conversion.Start(args);
+            
+            Console.WriteLine(parser.GetFFmpegOutput());
+
+            return null;
+        }
+    }
+
+    public class FFmpegOutputParser
+    {
+        private StringBuilder _ffmpegOutput;
+
+        public FFmpegOutputParser()
+        {
+            this._ffmpegOutput = new StringBuilder();
+        }
+
+        public void ConversionOnOnDataReceived(object sender, DataReceivedEventArgs e)
+        {
+            this._ffmpegOutput.AppendLine(e.Data);
+        }
+
+        public string GetFFmpegOutput()
+        {
+            return this._ffmpegOutput.ToString();
         }
     }
 }
