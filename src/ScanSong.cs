@@ -41,7 +41,33 @@ namespace loudgain
 
         public override string ToString()
         {
-            return $"File: {this.FilePath}\n{this.Track}\n{this.Album}";
+            const bool album = false;
+            string trackString;
+            string albumString;
+
+            const int alignment = 10;
+
+            if (this.Track is null)
+                return "";
+            else
+            {
+                trackString = $"Track: {this.FilePath}\n"+
+                              String.Format("{0,-10}{1}\n", "Loudness:", this.Track.Loudness)+
+                              String.Format("{0,-10}{1}\n", "Range:", this.Track.Range)+
+                              String.Format("{0,-10}{1} ({2})\n", "Peak:", this.Track.Peak, this.Track.Peak.ToDecibel())+
+                              String.Format("{0,-10}{1}\n", "Gain:", this.Track.Gain);
+            }
+
+            if (this.Album is not null)
+            {
+                albumString = $"\nAlbum:\n" +
+                              String.Format("{0,-10}{1}\n", "Loudness:", this.Album.Loudness)+
+                              String.Format("{0,-10}{1}\n", "Range:", this.Album.Range)+
+                              String.Format("{0,-10}{1} ({2})\n", "Peak:", this.Album.Peak, this.Album.Peak.ToDecibel())+
+                              String.Format("{0,-10}{1}\n", "Gain:", this.Album.Gain);
+            }
+
+            return album ? trackString + albumString : trackString;
         }
 
         public static async Task<ReplaygainValues?> TrackScan(string song)
