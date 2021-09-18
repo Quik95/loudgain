@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShellProgressBar;
 
 namespace loudgain
 {
@@ -13,17 +14,26 @@ namespace loudgain
 
             var scanResults = new Dictionary<string, ScanResult>(
                 songs.Songs.Select(song => new KeyValuePair<string, ScanResult>(song, new ScanResult(song)))
-                );
-            
-            foreach (var song in songs.Songs)
+            );
+            var options = new ProgressBarOptions
             {
-                var res = await ScanResult.TrackScan(song);
-                scanResults[song].Track = res;
+                ProgressCharacter = '█',
+                CollapseWhenFinished = true,
+            };
+
+            using (var pbar = new ProgressBar(songs.Songs.Length, "Scanning tracks...", options))
+            {
+                foreach (var song in songs.Songs)
+                {
+                    var res = await ScanResult.TrackScan(song);
+                    scanResults[song].Track = res;
+                    pbar.Tick();
+                }
             }
-            
+
             foreach (var keyValuePair in scanResults)
             {
-                Console.WriteLine(keyValuePair.Value); 
+                Console.WriteLine(keyValuePair.Value);
             }
         }
     }
