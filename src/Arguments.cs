@@ -1,89 +1,92 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.IO;
+using System.Text;
 
 namespace loudgain
 {
     class SongsList
     {
-        public string[] Songs { get; }
+        private static readonly HashSet<string> AllowedExtensions = new HashSet<string>(
+            new[]
+            {
+                ".aiff",
+                ".aif",
+                ".alfc",
+                ".ape",
+                ".apl",
+                ".bwf",
+                ".flac",
+                ".mp3",
+                ".mp4",
+                ".m4a",
+                ".m4b",
+                ".m4p",
+                ".m4r",
+                ".mpc",
+                ".ogg",
+                ".tta",
+                ".wma",
+                ".wv",
+            }
+        );
+
+        public List<string> Songs { get; }
 
         public SongsList(string[] songs)
         {
             var expanded = expandDirectories(songs);
 
-            var badSong = CheckExtensions(expanded);
-            if (badSong is not null)
+            var allowedSongs = new List<string>(expanded.Length);
+            foreach (var song in expanded)
             {
-                Console.WriteLine(badSong);
-                Environment.Exit(1);
+                if (CheckExtensions(song))
+                    allowedSongs.Add(song);
             }
 
-            this.Songs = expanded;
+            if (allowedSongs.Count == 0)
+            {
+                Console.WriteLine("No songs provided. Exiting...");
+                Environment.Exit(-1);
+            }
+
+            this.Songs = allowedSongs;
         }
 
-        private static string? CheckExtensions(string[] songs)
+        private static bool CheckExtensions(string song)
         {
-            var allowedExtensions = new System.Collections.Generic.HashSet<string>(
-                new[]
-                {
-                    ".aiff",
-                    ".aif",
-                    ".alfc",
-                    ".ape",
-                    ".apl",
-                    ".bwf",
-                    ".flac",
-                    ".mp3",
-                    ".mp4",
-                    ".m4a",
-                    ".m4b",
-                    ".m4p",
-                    ".m4r",
-                    ".mpc",
-                    ".ogg",
-                    ".tta",
-                    ".wma",
-                    ".wv",
-                }
-            );
+            var extension = Path.GetExtension(song);
+            if (!AllowedExtensions.Contains(extension))
+                return false;
 
-            foreach (var song in songs)
-            {
-                var extension = System.IO.Path.GetExtension(song);
-                if (!allowedExtensions.Contains(extension))
-                {
-                    return $"invalid extension: {song}";
-                }
+            if (!File.Exists(song))
+                return false;
 
-                if (!System.IO.File.Exists(song))
-                {
-                    return $"file does not exits: {song}";
-                }
-            }
-
-            return null;
+            return true;
         }
 
         private string[] expandDirectories(string[] songs)
         {
-            var sc = new System.Collections.Specialized.StringCollection();
+            var sc = new StringCollection();
 
             foreach (var song in songs)
             {
-                if (System.IO.File.Exists(song))
+                if (File.Exists(song))
                 {
                     sc.Add(song);
                     continue;
                 }
 
-                var dirContents = System.IO.Directory.GetFiles(song);
+                var dirContents = Directory.GetFiles(song);
                 sc.AddRange(dirContents);
 
-                var subDirectories = System.IO.Directory.GetDirectories(song);
+                var subDirectories = Directory.GetDirectories(song);
                 if (subDirectories.Length > 0)
                 {
                     foreach (var subdir in subDirectories)
                     {
-                        sc.AddRange(expandDirectories(new[] { subdir }));
+                        sc.AddRange(expandDirectories(new[] {subdir}));
                     }
                 }
             }
@@ -96,7 +99,7 @@ namespace loudgain
 
         public override string ToString()
         {
-            var sb = new System.Text.StringBuilder();
+            var sb = new StringBuilder();
 
             foreach (var song in this.Songs)
             {

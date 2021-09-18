@@ -21,7 +21,7 @@ namespace loudgain
                 CollapseWhenFinished = true,
             };
 
-            using (var pbar = new ProgressBar(songs.Songs.Length, "Scanning tracks...", options))
+            using (var pbar = new ProgressBar(songs.Songs.Count, "Scanning tracks...", options))
             {
                 foreach (var song in songs.Songs)
                 {
