@@ -83,6 +83,7 @@ namespace loudgain
             }
             catch
             {
+                Console.WriteLine($"failed to scan: {song}");
                 return null;
             }
         }

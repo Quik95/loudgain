@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using File = TagLib.File;
 
 namespace loudgain
 {
@@ -22,7 +23,7 @@ namespace loudgain
             {
                 res.Add(album, songPlusAlbum.Where(s => s.Item2 == album).Select(s => s.Item1).ToArray());
             }
-            
+
             return res;
         }
 
@@ -30,7 +31,7 @@ namespace loudgain
         {
             try
             {
-                var file = TagLib.File.Create(song);
+                var file = File.Create(song);
                 return new Tuple<string, string?>(song, file.Tag.Album);
             }
             catch
@@ -41,15 +42,11 @@ namespace loudgain
 
         public static async Task<ReplaygainValues?> ScanAlbum(string[] albumSongs)
         {
-            if (albumSongs.Length == 1)
-            {
-                return null;
-            }
-
             var joinedSongs = await _joinAlbumSongs(albumSongs);
             if (joinedSongs is null)
                 return null;
-            return await ScanResult.TrackScan(joinedSongs);
+            var res = await ScanResult.TrackScan(joinedSongs);
+            return res;
         }
 
         private static async Task<string?> _joinAlbumSongs(string[] songs)
@@ -57,8 +54,8 @@ namespace loudgain
             var ffmpegConcatInputFile = await _createFFmpegConcatFile(songs);
             if (ffmpegConcatInputFile is null)
                 return null;
-
-            var outFile = Path.ChangeExtension(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()), Path.GetExtension(songs[0]));
+            var outFile = new TempFile(Path.ChangeExtension(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()),
+                Path.GetExtension(songs[0]))).FileName;
 
             var args = $"-hide_banner -y -f concat -safe 0 -i {ffmpegConcatInputFile} -c copy {outFile}";
 
@@ -87,17 +84,17 @@ namespace loudgain
         {
             try
             {
-                var filename = Path.GetTempFileName();
-                await using var file = new StreamWriter(filename);
+                var tmp = new TempFile();
+                await using var file = new StreamWriter(tmp.FileName);
                 foreach (var song in songs)
                 {
                     var quotesEscaped = _escapeQuotes(song);
                     await file.WriteLineAsync($"file '{quotesEscaped}'");
                 }
 
-                return filename;
+                return tmp.FileName;
             }
-            catch (IOException e)
+            catch
             {
                 return null;
             }
@@ -106,6 +103,39 @@ namespace loudgain
         private static string _escapeQuotes(string song)
         {
             return song.Replace(@"'", @"'\''");
+        }
+    }
+
+    class TempFile
+    {
+        public string FileName { get; }
+
+        private void _disposeFile(object? sender, ConsoleCancelEventArgs consoleCancelEventArgs)
+        {
+            System.IO.File.Delete(this.FileName);
+        }
+
+        private void _disposeFile()
+        {
+            System.IO.File.Delete(this.FileName);
+        }
+
+        public TempFile(string filename)
+        {
+            this.FileName = filename;
+            Console.CancelKeyPress += this._disposeFile;
+        }
+
+        public TempFile()
+        {
+            this.FileName = Path.GetTempFileName();
+            Console.CancelKeyPress += this._disposeFile;
+        }
+
+        ~TempFile()
+        {
+            Console.CancelKeyPress -= this._disposeFile;
+            this._disposeFile();
         }
     }
 }
