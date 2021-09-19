@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Xabe.FFmpeg;
 
 namespace loudgain
 {
@@ -22,21 +21,6 @@ namespace loudgain
             this.FilePath = path;
             this.Track = null;
             this.Album = null;
-
-            /* this.Track = new TrackValues( */
-            /*     new Decibel(10), */
-            /*     new LinearLoudness(10), */
-            /*     new Decibel(10), */
-            /*     new LoudnessUnitFullScale(20) */
-            /* ); */
-
-
-            /* this.Album = new AlbumValues( */
-            /*     new Decibel(10), */
-            /*     new LinearLoudness(10), */
-            /*     new Decibel(10), */
-            /*     new LoudnessUnitFullScale(20) */
-            /* ); */
         }
 
         public override string ToString()
@@ -49,7 +33,7 @@ namespace loudgain
                 return "";
             else
             {
-                trackString = $"Track: {this.FilePath}\n"+
+                trackString = $"Track: {this.FilePath}\n" +
                               $"{"Loudness:",-10}{this.Track.Loudness}\n" +
                               $"{"Range:",-10}{this.Track.Range}\n" +
                               $"{"Peak:",-10}{this.Track.Peak} ({this.Track.Peak.ToDecibel()})\n" +
@@ -67,31 +51,44 @@ namespace loudgain
 
             return album ? trackString + albumString : trackString;
         }
-
+        
         public static async Task<ReplaygainValues?> TrackScan(string song)
         {
             var args =
                 $"-i \"{song}\" -hide_banner -nostats -filter_complex ebur128=peak='true':framelog='verbose' -f null -";
 
-            var conversion = FFmpeg.Conversions.New();
-            var parser = new FFmpegOutputParser();
-
-            conversion.OnDataReceived += parser.ConversionOnOnDataReceived;
-
-            await conversion.Start(args);
-
-            var values = parser.GetMatches();
-            if (values is null)
+            try
             {
-                Console.WriteLine(parser.GetFFmpegOutput());
+                using var process = new Process();
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.FileName = "ffmpeg";
+                process.StartInfo.Arguments = args;
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.RedirectStandardError = true;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.Start();
+
+                var ffmpegOutput = process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                var parser = new FFmpegOutputParser();
+
+                var values = parser.GetMatches(await ffmpegOutput);
+                if (values is null)
+                {
+                    Console.Error.WriteLine(values);
+                    return null;
+                }
+
+                var gain = Gain.CalculateGain(values.IntegratedLoudness, values.Peak);
+                var res = new ReplaygainValues(gain, values.Peak.ToLinear(), values.LoudnessRange.ToDecibel(),
+                    new LoudnessUnitFullScale(-18), values.IntegratedLoudness);
+
+                return res;
+            }
+            catch
+            {
                 return null;
             }
-
-            var gain = Gain.CalculateGain(values.IntegratedLoudness, values.Peak);
-            var res = new ReplaygainValues(gain, values.Peak.ToLinear(), values.LoudnessRange.ToDecibel(),
-                new LoudnessUnitFullScale(-18), values.IntegratedLoudness);
-
-            return res;
         }
     }
 
@@ -126,10 +123,8 @@ namespace loudgain
         public record ScanValues(LoudnessUnitFullScale IntegratedLoudness, Decibel Peak,
             LoudnessUnit LoudnessRange);
 
-        public ScanValues? GetMatches()
+        public ScanValues? GetMatches(string searchString)
         {
-            var searchString = this.GetFFmpegOutput();
-
             var integratedLoudnessMatches = IntegratedLoudnessRegexp.Matches(searchString);
             if (integratedLoudnessMatches.Count == 0)
                 return null;
