@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace loudgain
@@ -38,13 +39,7 @@ namespace loudgain
         {
             var expanded = expandDirectories(songs);
 
-            var allowedSongs = new List<string>(expanded.Length);
-            foreach (var song in expanded)
-            {
-                if (CheckExtensions(song))
-                    allowedSongs.Add(song);
-            }
-
+            var allowedSongs = new List<string>(expanded.Where(CheckExtension));
             if (allowedSongs.Count == 0)
             {
                 Console.WriteLine("No songs provided. Exiting...");
@@ -54,7 +49,7 @@ namespace loudgain
             this.Songs = allowedSongs;
         }
 
-        private static bool CheckExtensions(string song)
+        private static bool CheckExtension(string song)
         {
             var extension = Path.GetExtension(song);
             if (!AllowedExtensions.Contains(extension))
