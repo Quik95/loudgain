@@ -14,80 +14,95 @@ namespace loudgain
         static async Task Main(string[] args)
         {
             var songs = new SongsList(args);
-            
-            var songsInAlbum = Album.GetSongsInAlbum(songs.Songs);
-            Console.WriteLine($"found {songsInAlbum.Keys.Count} albums in {songsInAlbum.Values.Aggregate(0, (cum, songs) => cum + songs.Length)} songs");
 
-            var scanResults = new ConcurrentDictionary<string, ScanResult>(
-                songs.Songs.Select(song => new KeyValuePair<string, ScanResult>(song, new ScanResult(song)))
-            );
-            var options = new ProgressBarOptions
+            var songsInAlbum = Album.GetSongsInAlbum(songs.Songs);
+            Console.WriteLine(
+                $"found {songsInAlbum.Keys.Count} albums in {songs.Songs.Count} songs");
+
+            var masterOptions = new ProgressBarOptions
             {
                 ProgressCharacter = '█',
+                CollapseWhenFinished = true,
+            };
+
+            var childOptions = new ProgressBarOptions
+            {
+                ProgressCharacter = '─',
                 CollapseWhenFinished = true,
                 DisableBottomPercentage = true,
             };
 
 
-            using (var pbar = new ProgressBar(songs.Songs.Count, $"Scanning tracks: [0/{songs.Songs.Count}]", options))
-            {
-                var songsDone = 0;
-                var scanTrack = new ActionBlock<string>(
-                    async song =>
+            var masterProgressBar =
+                new ProgressBar(songs.Songs.Count + songsInAlbum.Keys.Count, "Scanning songs", masterOptions);
+
+            var scanResults = new ConcurrentDictionary<string, ScanResult>(
+                songs.Songs.Select(song => new KeyValuePair<string, ScanResult>(song, new ScanResult(song)))
+            );
+
+            var trackProgressBar =
+                masterProgressBar.Spawn(songs.Songs.Count, $"Scanning tracks: [0/{songs.Songs.Count}]", childOptions);
+            var songsDone = 0;
+            var scanTrack = new ActionBlock<string>(
+                async song =>
+                {
+                    var res = await ScanResult.TrackScan(song);
+                    scanResults[song].Track = res;
+                    Interlocked.Increment(ref songsDone);
+
+                    masterProgressBar.Tick();
+                    trackProgressBar.Tick($"Scanning tracks: [{songsDone}/{songs.Songs.Count}]");
+                },
+                new ExecutionDataflowBlockOptions {MaxDegreeOfParallelism = Environment.ProcessorCount});
+
+            songs.Songs.ForEach(song => scanTrack.Post(song));
+            scanTrack.Complete();
+
+
+            var albumsThatNeedScanning = songsInAlbum.Where(entry => entry.Value.Length > 1)
+                .Select(entry => entry.Value).ToArray();
+            
+            var albumProgressBar = masterProgressBar.Spawn(songs.Songs.Count,
+                $"Scanning albums: [0/{songsInAlbum.Keys.Count}]",
+                childOptions);
+            var albumsDone = 0;
+            var scanAlbum = new ActionBlock<string[]>(
+                async albumSongs =>
+                {
+                    var result = await Album.ScanAlbum(albumSongs);
+                    if (result is not null)
                     {
-                        var res = await ScanResult.TrackScan(song);
-                        scanResults[song].Track = res;
-                        Interlocked.Increment(ref songsDone);
-                        pbar.Tick($"Scanning tracks: [{songsDone}/{songs.Songs.Count}]");
-                    },
-                    new ExecutionDataflowBlockOptions {MaxDegreeOfParallelism = Environment.ProcessorCount});
+                        foreach (var song in albumSongs)
+                        {
+                            scanResults[song].Album = result;
+                        }
+                    }
 
-                songs.Songs.ForEach(song => scanTrack.Post(song));
+                    Interlocked.Increment(ref albumsDone);
 
-                scanTrack.Complete();
-                await scanTrack.Completion;
+                    masterProgressBar.Tick();
+                    albumProgressBar.Tick($"Scanning albums: [{albumsDone}/{songsInAlbum.Keys.Count}]");
+                }, new ExecutionDataflowBlockOptions {MaxDegreeOfParallelism = Environment.ProcessorCount});
+
+            foreach (var albumSongs in albumsThatNeedScanning)
+            {
+                scanAlbum.Post(albumSongs);
             }
+            scanAlbum.Complete();
 
-
-
-            foreach (var songThatDoesNotNeedScanning in songsInAlbum.Where(entry => entry.Value.Length == 1).Select(entry => entry.Value[0]))
+            await Task.WhenAll(new[] {scanTrack.Completion, scanAlbum.Completion});
+                
+            trackProgressBar.Dispose();
+            albumProgressBar.Dispose();
+            masterProgressBar.Dispose();
+            
+            foreach (var songThatDoesNotNeedScanning in songsInAlbum.Where(entry => entry.Value.Length == 1)
+                .Select(entry => entry.Value[0]))
             {
                 if (scanResults[songThatDoesNotNeedScanning].Track is not null)
                     scanResults[songThatDoesNotNeedScanning].Album = scanResults[songThatDoesNotNeedScanning].Track;
             }
-
-            var albumsThatNeedScanning = songsInAlbum.Where(entry => entry.Value.Length > 1).Select(entry => entry.Value).ToArray();
-            var numberOfAlbumsToScan = albumsThatNeedScanning.Length;
-            using (var pbar = new ProgressBar(songs.Songs.Count, $"Scanning albums: [0/{numberOfAlbumsToScan}]",
-                options))
-            {
-                var albumsDone = 0;
-                var scanAlbum = new ActionBlock<string[]>(
-                    async albumSongs =>
-                    {
-
-                        var result = await Album.ScanAlbum(albumSongs);
-                        if (result is not null)
-                        {
-                            foreach (var song in albumSongs)
-                            {
-                                scanResults[song].Album = result;
-                            }
-                        }
-
-                        Interlocked.Increment(ref albumsDone);
-                        pbar.Tick($"Scanning albums: [{albumsDone}/{numberOfAlbumsToScan}]");
-                    }, new ExecutionDataflowBlockOptions{MaxDegreeOfParallelism = Environment.ProcessorCount});
-                
-                foreach (var albumSongs in albumsThatNeedScanning)
-                {
-                    scanAlbum.Post(albumSongs);
-                }
-                
-                scanAlbum.Complete();
-                await scanAlbum.Completion;
-            }
-
+            
             foreach (var scanResult in scanResults.Values)
             {
                 Console.WriteLine(scanResult);
