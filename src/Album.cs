@@ -36,12 +36,30 @@ namespace loudgain
             }
             catch
             {
+                Console.Error.WriteLine($"song: {song} appears to be corrupt");
                 return new Tuple<string, string?>(song, null);
             }
         }
 
+        private static bool _checkSameExtension(string[] songs)
+        {
+            var ext = Path.GetExtension(songs[0]);
+            return songs.All(song => Path.GetExtension(song) == ext);
+        }
+
         public static async Task<ReplaygainValues?> ScanAlbum(string[] albumSongs)
         {
+            if (!_checkSameExtension(albumSongs))
+            {
+                Console.WriteLine("All songs in an album must have the same extension:");
+                foreach (var song in albumSongs)
+                {
+                    Console.WriteLine(Path.GetFileName(song));
+                }
+
+                return null;
+            }
+
             var joinedSongs = await _joinAlbumSongs(albumSongs);
             if (joinedSongs is null)
                 return null;
