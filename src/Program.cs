@@ -90,17 +90,17 @@ namespace loudgain
             }
             scanAlbum.Complete();
 
-            await Task.WhenAll(new[] {scanTrack.Completion, scanAlbum.Completion});
+            await Task.WhenAll(scanTrack.Completion, scanAlbum.Completion);
                 
             trackProgressBar.Dispose();
             albumProgressBar.Dispose();
             masterProgressBar.Dispose();
             
-            foreach (var songThatDoesNotNeedScanning in songsInAlbum.Where(entry => entry.Value.Length == 1)
+            foreach (var albumThatDoesNotNeedScanning in songsInAlbum.Where(entry => entry.Value.Length == 1)
                 .Select(entry => entry.Value[0]))
             {
-                if (scanResults[songThatDoesNotNeedScanning].Track is not null)
-                    scanResults[songThatDoesNotNeedScanning].Album = scanResults[songThatDoesNotNeedScanning].Track;
+                if (scanResults[albumThatDoesNotNeedScanning].Track is not null)
+                    scanResults[albumThatDoesNotNeedScanning].Album = scanResults[albumThatDoesNotNeedScanning].Track;
             }
             
             foreach (var scanResult in scanResults.Values)
