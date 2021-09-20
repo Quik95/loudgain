@@ -30,6 +30,7 @@ namespace loudgain
 
             if (this.Track is null)
                 return "";
+            
             trackString = $"Track: {this.FilePath}\n" +
                           $"{"Loudness:",-10}{this.Track.Loudness}\n" +
                           $"{"Range:",-10}{this.Track.Range}\n" +
@@ -71,7 +72,7 @@ namespace loudgain
                 var values = parser.GetMatches(await ffmpegOutput);
                 if (values is null)
                 {
-                    Console.Error.WriteLine(values);
+                    Program.MasterProgressBar.WriteErrorLine($"failed to scan song: {song}");
                     return null;
                 }
 
@@ -83,7 +84,7 @@ namespace loudgain
             }
             catch
             {
-                Console.WriteLine($"failed to scan: {song}");
+                    Program.MasterProgressBar.WriteErrorLine($"failed to scan song: {song}");
                 return null;
             }
         }
@@ -91,8 +92,6 @@ namespace loudgain
 
     public class FFmpegOutputParser
     {
-        private readonly StringBuilder _ffmpegOutput;
-
         private static readonly Regex IntegratedLoudnessRegexp =
             new Regex(@"I:\s*(?<value>-?\d+\.?\d{1})\sLUFS", RegexOptions.Compiled);
 
@@ -101,21 +100,6 @@ namespace loudgain
 
         private static readonly Regex TruePeakRegexp =
             new Regex(@"Peak:\s*(?<value>-?\d+\.?\d{1})\sdBFS", RegexOptions.Compiled);
-
-        public FFmpegOutputParser()
-        {
-            this._ffmpegOutput = new StringBuilder();
-        }
-
-        public void ConversionOnOnDataReceived(object sender, DataReceivedEventArgs e)
-        {
-            this._ffmpegOutput.AppendLine(e.Data);
-        }
-
-        public string GetFFmpegOutput()
-        {
-            return this._ffmpegOutput.ToString();
-        }
 
         public record ScanValues(LoudnessUnitFullScale IntegratedLoudness, Decibel Peak,
             LoudnessUnit LoudnessRange);

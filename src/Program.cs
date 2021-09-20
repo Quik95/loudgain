@@ -11,6 +11,15 @@ namespace loudgain
 {
     class Program
     {
+        public static ProgressBarOptions ChildProgressBarOptions = new()
+        {
+            ProgressCharacter = '─',
+            CollapseWhenFinished = true,
+            DisableBottomPercentage = true,
+        };
+
+        public static ProgressBar MasterProgressBar;
+
         static async Task Main(string[] args)
         {
             var songs = new SongsList(args);
@@ -19,29 +28,21 @@ namespace loudgain
             Console.WriteLine(
                 $"found {songsInAlbum.Keys.Count} albums in {songs.Songs.Count} songs");
 
-            var masterOptions = new ProgressBarOptions
-            {
-                ProgressCharacter = '█',
-                CollapseWhenFinished = true,
-            };
+            MasterProgressBar = new ProgressBar(songs.Songs.Count + songsInAlbum.Keys.Count, "Scanning songs",
+                new ProgressBarOptions
+                {
+                    ProgressCharacter = '█',
+                    CollapseWhenFinished = true,
+                });
 
-            var childOptions = new ProgressBarOptions
-            {
-                ProgressCharacter = '─',
-                CollapseWhenFinished = true,
-                DisableBottomPercentage = true,
-            };
-
-
-            var masterProgressBar =
-                new ProgressBar(songs.Songs.Count + songsInAlbum.Keys.Count, "Scanning songs", masterOptions);
 
             var scanResults = new ConcurrentDictionary<string, ScanResult>(
                 songs.Songs.Select(song => new KeyValuePair<string, ScanResult>(song, new ScanResult(song)))
             );
 
             var trackProgressBar =
-                masterProgressBar.Spawn(songs.Songs.Count, $"Scanning tracks: [0/{songs.Songs.Count}]", childOptions);
+                MasterProgressBar.Spawn(songs.Songs.Count, $"Scanning tracks: [0/{songs.Songs.Count}]",
+                    ChildProgressBarOptions);
             var songsDone = 0;
             var scanTrack = new ActionBlock<string>(
                 async song =>
@@ -50,7 +51,7 @@ namespace loudgain
                     scanResults[song].Track = res;
                     Interlocked.Increment(ref songsDone);
 
-                    masterProgressBar.Tick();
+                    MasterProgressBar.Tick();
                     trackProgressBar.Tick($"Scanning tracks: [{songsDone}/{songs.Songs.Count}]");
                 },
                 new ExecutionDataflowBlockOptions {MaxDegreeOfParallelism = Environment.ProcessorCount});
@@ -61,10 +62,10 @@ namespace loudgain
 
             var albumsThatNeedScanning = songsInAlbum.Where(entry => entry.Value.Length > 1)
                 .Select(entry => entry.Value).ToArray();
-            
-            var albumProgressBar = masterProgressBar.Spawn(songs.Songs.Count,
+
+            var albumProgressBar = MasterProgressBar.Spawn(songs.Songs.Count,
                 $"Scanning albums: [0/{songsInAlbum.Keys.Count}]",
-                childOptions);
+                ChildProgressBarOptions);
             var albumsDone = 0;
             var scanAlbum = new ActionBlock<string[]>(
                 async albumSongs =>
@@ -80,7 +81,7 @@ namespace loudgain
 
                     Interlocked.Increment(ref albumsDone);
 
-                    masterProgressBar.Tick();
+                    MasterProgressBar.Tick();
                     albumProgressBar.Tick($"Scanning albums: [{albumsDone}/{songsInAlbum.Keys.Count}]");
                 }, new ExecutionDataflowBlockOptions {MaxDegreeOfParallelism = Environment.ProcessorCount});
 
@@ -88,21 +89,22 @@ namespace loudgain
             {
                 scanAlbum.Post(albumSongs);
             }
+
             scanAlbum.Complete();
 
             await Task.WhenAll(scanTrack.Completion, scanAlbum.Completion);
-                
+
             trackProgressBar.Dispose();
             albumProgressBar.Dispose();
-            masterProgressBar.Dispose();
-            
+            MasterProgressBar.Dispose();
+
             foreach (var albumThatDoesNotNeedScanning in songsInAlbum.Where(entry => entry.Value.Length == 1)
                 .Select(entry => entry.Value[0]))
             {
                 if (scanResults[albumThatDoesNotNeedScanning].Track is not null)
                     scanResults[albumThatDoesNotNeedScanning].Album = scanResults[albumThatDoesNotNeedScanning].Track;
             }
-            
+
             foreach (var scanResult in scanResults.Values)
             {
                 Console.WriteLine(scanResult);

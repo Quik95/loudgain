@@ -36,7 +36,7 @@ namespace loudgain
             }
             catch
             {
-                Console.Error.WriteLine($"song: {song} appears to be corrupt");
+                Program.MasterProgressBar.WriteErrorLine($"song: {song} appears to be corrupt");
                 return new Tuple<string, string?>(song, null);
             }
         }
@@ -51,10 +51,10 @@ namespace loudgain
         {
             if (!_checkSameExtension(albumSongs))
             {
-                Console.WriteLine("All songs in an album must have the same extension:");
+                Program.MasterProgressBar.WriteLine("All songs in an album must have the same extension:");
                 foreach (var song in albumSongs)
                 {
-                    Console.WriteLine(Path.GetFileName(song));
+                    Program.MasterProgressBar.WriteLine(Path.GetFileName(song));
                 }
 
                 return null;
@@ -91,7 +91,7 @@ namespace loudgain
 
             if (process.ExitCode != 0)
             {
-                await Console.Error.WriteLineAsync($"failed to concatenate album songs: {await potentialError}");
+                Program.MasterProgressBar.WriteErrorLine($"failed to concatenate album songs: {await potentialError}");
                 return null;
             }
 
