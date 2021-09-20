@@ -36,7 +36,7 @@ namespace loudgain
             }
             catch
             {
-                Program.MasterProgressBar.WriteErrorLine($"song: {song} appears to be corrupt");
+                Console.Error.WriteLine($"song: {song} appears to be corrupt");
                 return new Tuple<string, string?>(song, null);
             }
         }
