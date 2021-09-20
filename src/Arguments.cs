@@ -79,9 +79,9 @@ namespace loudgain
                 var subDirectories = Directory.GetDirectories(song);
                 if (subDirectories.Length > 0)
                 {
-                    foreach (var subdir in subDirectories)
+                    foreach (var subDirectory in subDirectories)
                     {
-                        sc.AddRange(expandDirectories(new[] {subdir}));
+                        sc.AddRange(expandDirectories(new[] {subDirectory}));
                     }
                 }
             }

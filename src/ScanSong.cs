@@ -1,7 +1,5 @@
-using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -12,7 +10,7 @@ namespace loudgain
 
     public class ScanResult
     {
-        public string FilePath { get; set; }
+        public string FilePath { get; }
         public ReplaygainValues? Track { get; set; }
         public ReplaygainValues? Album { get; set; }
 
@@ -25,21 +23,20 @@ namespace loudgain
 
         public override string ToString()
         {
-            string trackString = "";
-            string albumString = "";
 
             if (this.Track is null)
                 return "";
             
-            trackString = $"Track: {this.FilePath}\n" +
+            var trackString = $"Track: {this.FilePath}\n" +
                           $"{"Loudness:",-10}{this.Track.Loudness}\n" +
                           $"{"Range:",-10}{this.Track.Range}\n" +
                           $"{"Peak:",-10}{this.Track.Peak} ({this.Track.Peak.ToDecibel()})\n" +
                           $"{"Gain:",-10}{this.Track.Gain}\n";
 
+            string albumString = "";
             if (this.Album is not null)
             {
-                albumString = $"\nAlbum:\n" +
+                albumString = "\nAlbum:\n" +
                               $"{"Loudness:",-10}{this.Album.Loudness}\n" +
                               $"{"Range:",-10}{this.Album.Range}\n" +
                               $"{"Peak:",-10}{this.Album.Peak} ({this.Album.Peak.ToDecibel()})\n" +

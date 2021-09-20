@@ -8,7 +8,7 @@ using File = TagLib.File;
 
 namespace loudgain
 {
-    public class Album
+    public static class Album
     {
         public static Dictionary<string, string[]> GetSongsInAlbum(List<string> songList)
         {
@@ -16,7 +16,7 @@ namespace loudgain
 
             var songPlusAlbum = songList.Select(_getSongAlbum).ToArray();
             var uniqueAlbums = new HashSet<string>(
-                songPlusAlbum.Where(song => song.Item2 is not null).Select(songPlusAlbum => songPlusAlbum.Item2)
+                songPlusAlbum.Where(tuple => tuple.Item2 is not null).Select(tuple => tuple.Item2)
                     .OfType<string>()
             );
             foreach (var album in uniqueAlbums)
