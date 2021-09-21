@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text;
+using CommandLine;
 
 namespace loudgain
 {
@@ -35,7 +36,7 @@ namespace loudgain
 
         public List<string> Songs { get; }
 
-        public SongsList(string[] songs)
+        public SongsList(IEnumerable<string> songs)
         {
             var expanded = expandDirectories(songs);
 
@@ -61,7 +62,7 @@ namespace loudgain
             return true;
         }
 
-        private string[] expandDirectories(string[] songs)
+        private string[] expandDirectories(IEnumerable<string> songs)
         {
             var sc = new StringCollection();
 
@@ -102,6 +103,43 @@ namespace loudgain
             }
 
             return sb.ToString();
+        }
+    }
+
+    public class Options
+    {
+        [Value(0, Required = true)]
+        public IEnumerable<string> Songs { get; set; }
+        
+        [Option('r', "track", Default = true, HelpText = "Calculate track gain.")]
+        public bool Track { get; set;  }
+        
+        [Option('a', "album", Default = false, HelpText = "Calculate album gain (and track gain).")]
+        public bool Album { get; set;  }
+        
+        [Option('k', "noclip", Default = false, HelpText = "Lower track/album gain to avoid clipping (<= -1 dBTP).")]
+        public bool Noclip { get; set; }
+        
+        [Option('q', "quiet", Default = false, HelpText = "Don't print scanning status messages.")]
+        public bool Quiet { get; set; }
+        
+        [Option('d', "pregain", Default = 0.0, HelpText = "Apply n dB/LU pre-gain value.")]
+        public double _pregainFloat { get; set; }
+        public Decibel Pregain { get; set; }
+        
+        [Option('K', "maxtpl", Default = -1.0,HelpText = "Avoid clipping; max. true peak level = n dBTP.")]
+        public double _maxTruePeakLevelFloat { get; set; }
+        public Decibel MaxTruePeakLevel { get; set; }
+
+        public override string ToString()
+        {
+            return $"Songs: {String.Join(", ", this.Songs)}\n" +
+                   $"Track: {this.Track}\n" +
+                   $"Album: {this.Album}\n" +
+                   $"Clipping prevention: {this.Noclip}\n" +
+                   $"Quiet: {this.Quiet}\n" +
+                   $"Pregain: {this.Pregain}\n" +
+                   $"Max True Peak Level: {this.MaxTruePeakLevel}";
         }
     }
 }

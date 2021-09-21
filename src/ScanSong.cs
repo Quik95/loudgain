@@ -23,15 +23,14 @@ namespace loudgain
 
         public override string ToString()
         {
-
             if (this.Track is null)
                 return "";
-            
+
             var trackString = $"Track: {this.FilePath}\n" +
-                          $"{"Loudness:",-10}{this.Track.Loudness}\n" +
-                          $"{"Range:",-10}{this.Track.Range}\n" +
-                          $"{"Peak:",-10}{this.Track.Peak} ({this.Track.Peak.ToDecibel()})\n" +
-                          $"{"Gain:",-10}{this.Track.Gain}\n";
+                              $"{"Loudness:",-10}{this.Track.Loudness}\n" +
+                              $"{"Range:",-10}{this.Track.Range}\n" +
+                              $"{"Peak:",-10}{this.Track.Peak} ({this.Track.Peak.ToDecibel()})\n" +
+                              $"{"Gain:",-10}{this.Track.Gain}\n";
 
             string albumString = "";
             if (this.Album is not null)
@@ -45,7 +44,7 @@ namespace loudgain
 
             return trackString + albumString;
         }
-        
+
         public static async Task<ReplaygainValues?> TrackScan(string song)
         {
             var args =
@@ -81,7 +80,7 @@ namespace loudgain
             }
             catch
             {
-                    Program.MasterProgressBar.WriteErrorLine($"failed to scan song: {song}");
+                Program.MasterProgressBar.WriteErrorLine($"failed to scan song: {song}");
                 return null;
             }
         }

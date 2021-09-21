@@ -13,6 +13,8 @@ namespace loudgain
         public static Dictionary<string, string[]> GetSongsInAlbum(List<string> songList)
         {
             var res = new Dictionary<string, string[]>();
+            if (!Program.Config.Album)
+                return res;
 
             var songPlusAlbum = songList.Select(_getSongAlbum).ToArray();
             var uniqueAlbums = new HashSet<string>(

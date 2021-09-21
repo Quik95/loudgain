@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using CommandLine;
 using ShellProgressBar;
 
 namespace loudgain
@@ -22,15 +23,21 @@ namespace loudgain
         private static ChildProgressBar _trackProgressBar = null!;
         private static ChildProgressBar _albumProgressBar = null!;
 
+        public static Options Config = null!;
+
         private static readonly ConcurrentDictionary<string, ScanResult> ScanResults = new();
 
         static async Task Main(string[] args)
         {
-            var songs = new SongsList(args);
+            _parseArguments(args);
+            Console.WriteLine(Config);
+            
+            var songs = new SongsList(Config.Songs);
 
             var songsInAlbum = Album.GetSongsInAlbum(songs.Songs);
-            Console.WriteLine(
-                $"found {songsInAlbum.Keys.Count} albums in {songs.Songs.Count} songs");
+            if (songsInAlbum.Keys.Count > 0)
+                Console.WriteLine(
+                    $"found {songsInAlbum.Keys.Count} albums in {songs.Songs.Count} songs");
 
             MasterProgressBar = new ProgressBar(songs.Songs.Count + songsInAlbum.Keys.Count, "Scanning songs",
                 new ProgressBarOptions
@@ -86,6 +93,27 @@ namespace loudgain
             }
         }
 
+        private static void _parseArguments(string[] args)
+        {
+            var config = Parser.Default.ParseArguments<Options>(args).WithNotParsed(errors =>
+            {
+                if (errors.Any(error => error is CommandLine.HelpRequestedError))
+                    Environment.Exit(0);
+
+                foreach (var error in errors)
+                {
+                    Console.Error.WriteLine(error);
+                }
+
+                Environment.Exit(1);
+            }).WithParsed(opt =>
+            {
+                opt.Pregain = new Decibel(opt._pregainFloat);
+                opt.MaxTruePeakLevel = new Decibel(opt._maxTruePeakLevelFloat);
+                Config = opt;
+            });
+        }
+
         private static ActionBlock<string> GetScanTrackAction(int songsCount
         )
         {
@@ -132,6 +160,9 @@ namespace loudgain
 
         private static void SetAlbumGainToTrackGain(Dictionary<string, string[]> songsInAlbum)
         {
+            if (!Config.Album)
+                return;
+            
             foreach (var albumThatDoesNotNeedScanning in songsInAlbum.Where(entry => entry.Value.Length == 1)
                 .Select(entry => entry.Value[0]))
             {
